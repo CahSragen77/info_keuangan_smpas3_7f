@@ -1,0 +1,11 @@
+/* ===== QR SCANNER ===== */
+        #qr-reader {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        #qr-reader video {
+            border-radius: var(--radius-sm);
+        }
