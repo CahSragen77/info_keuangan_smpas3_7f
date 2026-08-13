@@ -1,0 +1,1655 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+    <title>Dashboard Keuangan Sekolah - Pasundan 3</title>
+
+    <!-- ===== LIBRARIES ===== -->
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
+    </script>
+    <!-- SheetJS (Excel) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js">
+    </script>
+    <!-- jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+    </script>
+    <!-- html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+    </script>
+    <!-- QR Scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js">
+    </script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <style>
+        /* ===== RESET & GLOBAL ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #1a3a5c;
+            --primary-light: #2a5a8c;
+            --primary-dark: #0f2540;
+            --secondary: #e8a838;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --info: #17a2b8;
+            --bg: #f0f4f8;
+            --card-bg: #ffffff;
+            --text: #2d3748;
+            --text-light: #718096;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 0 0 80px 0;
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary-light);
+            border-radius: 10px;
+        }
+
+        /* ===== HEADER ===== */
+        .header {
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+            color: white;
+            padding: 16px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .header-left .logo {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff, var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-left .subtitle {
+            font-size: 12px;
+            opacity: 0.8;
+            -webkit-text-fill-color: rgba(255, 255, 255, 0.8);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--secondary);
+            color: var(--primary-dark);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(232, 168, 56, 0.4);
+        }
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+        }
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(220, 53, 69, 0.4);
+        }
+        .btn-info {
+            background: var(--info);
+            color: white;
+        }
+        .btn-info:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(23, 162, 184, 0.4);
+        }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: white;
+        }
+        .btn-sm {
+            padding: 5px 12px;
+            font-size: 12px;
+        }
+        .btn-xs {
+            padding: 3px 10px;
+            font-size: 11px;
+            border-radius: 6px;
+        }
+
+        /* ===== CONTAINER ===== */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* ===== STATS CARDS ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 18px 20px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            border-left: 4px solid var(--primary);
+        }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
+        }
+        .stat-card .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-light);
+            font-weight: 600;
+        }
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 800;
+            margin-top: 4px;
+        }
+        .stat-card .value.primary {
+            color: var(--primary);
+        }
+        .stat-card .value.success {
+            color: var(--success);
+        }
+        .stat-card .value.danger {
+            color: var(--danger);
+        }
+        .stat-card .value.warning {
+            color: var(--warning);
+        }
+        .stat-card .icon {
+            float: right;
+            font-size: 32px;
+            opacity: 0.15;
+        }
+
+        /* ===== CHARTS ===== */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .chart-box {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 18px;
+            box-shadow: var(--shadow);
+        }
+        .chart-box h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: var(--text-light);
+        }
+        .chart-box canvas {
+            max-height: 200px;
+            max-width: 100%;
+        }
+
+        /* ===== TABEL ===== */
+        .table-wrapper {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .table-toolbar {
+            padding: 14px 18px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .table-toolbar .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg);
+            border-radius: var(--radius-sm);
+            padding: 4px 14px;
+            flex: 1;
+            min-width: 180px;
+        }
+        .table-toolbar .search-box input {
+            border: none;
+            background: transparent;
+            padding: 8px 0;
+            outline: none;
+            font-size: 14px;
+            width: 100%;
+        }
+        .table-toolbar .search-box i {
+            color: var(--text-light);
+        }
+
+        .table-toolbar .btn-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+            padding: 0 4px 4px 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 700px;
+        }
+
+        table th {
+            background: var(--primary);
+            color: white;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: middle;
+        }
+
+        table tr:hover td {
+            background: #f7fafc;
+        }
+
+        table .gender-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .gender-badge.L {
+            background: #bee3f8;
+            color: #2b6cb0;
+        }
+        .gender-badge.P {
+            background: #fbb6ce;
+            color: #9b2c2c;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .status-badge.paid {
+            background: #c6f6d5;
+            color: #276749;
+        }
+        .status-badge.unpaid {
+            background: #fed7d7;
+            color: #9b2c2c;
+        }
+
+        .qr-img {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .qr-img:hover {
+            transform: scale(1.2);
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        /* ===== MODAL ===== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-box {
+            background: white;
+            border-radius: var(--radius);
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 28px 24px;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
+            animation: modalIn 0.25s ease;
+        }
+
+        @keyframes modalIn {
+            from {
+                transform: scale(0.9) translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-box h2 {
+            font-size: 20px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-box .close-btn {
+            margin-left: auto;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-light);
+        }
+
+        .modal-box label {
+            font-weight: 600;
+            font-size: 13px;
+            display: block;
+            margin-top: 12px;
+            margin-bottom: 4px;
+        }
+
+        .modal-box input,
+        .modal-box select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            transition: var(--transition);
+            outline: none;
+        }
+        .modal-box input:focus,
+        .modal-box select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(26, 58, 92, 0.1);
+        }
+
+        .modal-box .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        /* ===== QR SCANNER ===== */
+        #qr-reader {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        #qr-reader video {
+            border-radius: var(--radius-sm);
+        }
+
+        /* ===== TOAST ===== */
+        .toast-container {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-width: 360px;
+            width: 100%;
+        }
+
+        .toast {
+            background: var(--primary-dark);
+            color: white;
+            padding: 14px 20px;
+            border-radius: var(--radius-sm);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.3s ease;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .toast.success {
+            background: var(--success);
+        }
+        .toast.error {
+            background: var(--danger);
+        }
+        .toast.warning {
+            background: var(--warning);
+            color: var(--primary-dark);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* ===== FOOTER ===== */
+        .custom-footer {
+            background: var(--primary-dark);
+            color: rgba(255, 255, 255, 0.7);
+            text-align: center;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .custom-footer .author-name {
+            color: var(--secondary);
+            font-weight: 700;
+        }
+        .custom-footer .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .custom-footer .social-links a {
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            font-size: 13px;
+            transition: var(--transition);
+        }
+        .custom-footer .social-links a:hover {
+            color: var(--secondary);
+        }
+
+        /* ===== WHATSAPP FLOATING ===== */
+        .wa-floating {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            background: #25d366;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 30px rgba(37, 211, 102, 0.4);
+            z-index: 1500;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+        .wa-floating:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 40px rgba(37, 211, 102, 0.5);
+        }
+        .wa-floating svg {
+            width: 32px;
+            height: 32px;
+            fill: white;
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .header {
+                padding: 12px 16px;
+            }
+            .header-left .logo {
+                font-size: 20px;
+            }
+            .header-left .subtitle {
+                font-size: 10px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+            .stat-card {
+                padding: 14px 16px;
+            }
+            .stat-card .value {
+                font-size: 22px;
+            }
+
+            .charts-grid {
+                grid-template-columns: 1fr;
+                gap: 14px;
+            }
+
+            .table-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .table-toolbar .search-box {
+                min-width: unset;
+            }
+            .table-toolbar .btn-group {
+                justify-content: center;
+            }
+
+            .modal-box {
+                padding: 20px 16px;
+                margin: 10px;
+            }
+
+            .wa-floating {
+                width: 50px;
+                height: 50px;
+                bottom: 16px;
+                right: 16px;
+            }
+            .wa-floating svg {
+                width: 26px;
+                height: 26px;
+            }
+
+            .container {
+                padding: 12px;
+            }
+
+            /* Mobile card view for table */
+            table {
+                min-width: unset;
+            }
+            table th {
+                font-size: 11px;
+                padding: 6px 8px;
+            }
+            table td {
+                font-size: 12px;
+                padding: 6px 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+            .stat-card .value {
+                font-size: 18px;
+            }
+            .stat-card .label {
+                font-size: 10px;
+            }
+            .btn {
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+            .header-left .logo {
+                font-size: 16px;
+            }
+        }
+
+        /* ===== UTILITY ===== */
+        .text-center {
+            text-align: center;
+        }
+        .mt-12 {
+            margin-top: 12px;
+        }
+        .mb-12 {
+            margin-bottom: 12px;
+        }
+        .gap-8 {
+            gap: 8px;
+        }
+        .flex-wrap {
+            flex-wrap: wrap;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .w-full {
+            width: 100%;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.6s ease infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ===== HEADER ===== -->
+    <header class="header">
+        <div class="header-left">
+            <span class="logo">🏫 Pasundan 3</span>
+            <span class="subtitle">Dashboard Keuangan</span>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-outline btn-sm" onclick="refreshData()" id="btnRefresh">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="openScanner()">
+                <i class="fas fa-qrcode"></i> Scan QR
+            </button>
+            <button class="btn btn-primary btn-sm" id="loginBtn" onclick="toggleLogin()">
+                <i class="fas fa-lock"></i> <span id="loginText">Login Admin</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <div class="container">
+
+        <!-- ===== STATS ===== -->
+        <section class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <i class="fas fa-users icon"></i>
+                <div class="label">Total Siswa</div>
+                <div class="value primary" id="totalSiswa">0</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-male icon"></i>
+                <div class="label">Laki-laki</div>
+                <div class="value primary" id="totalL">0</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-female icon"></i>
+                <div class="label">Perempuan</div>
+                <div class="value primary" id="totalP">0</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-money-bill-wave icon"></i>
+                <div class="label">Total Pemasukan</div>
+                <div class="value success" id="totalPemasukan">Rp0</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-arrow-down icon"></i>
+                <div class="label">Total Pengeluaran</div>
+                <div class="value danger" id="totalPengeluaran">Rp0</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-wallet icon"></i>
+                <div class="label">Saldo Akhir</div>
+                <div class="value warning" id="saldoAkhir">Rp0</div>
+            </div>
+        </section>
+
+        <!-- ===== CHARTS ===== -->
+        <section class="charts-grid">
+            <div class="chart-box">
+                <h3><i class="fas fa-user-graduate"></i> Siswa L/P & Status Bayar</h3>
+                <canvas id="chartGender"></canvas>
+            </div>
+            <div class="chart-box">
+                <h3><i class="fas fa-chart-pie"></i> Status Pembayaran</h3>
+                <canvas id="chartPayment"></canvas>
+            </div>
+        </section>
+
+        <!-- ===== TABEL ===== -->
+        <div class="table-wrapper">
+            <div class="table-toolbar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Cari nama atau NIS..." oninput="renderTable()" />
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-success btn-sm" onclick="exportExcel()">
+                        <i class="fas fa-file-excel"></i> Excel
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="exportPDF()">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
+                    <button class="btn btn-info btn-sm" onclick="openGSheet()">
+                        <i class="fas fa-link"></i> GSheet
+                    </button>
+                    <button class="btn btn-warning btn-sm" style="background:#ffc107;color:#1a1a1a;" onclick="resetData()">
+                        <i class="fas fa-undo-alt"></i> Reset
+                    </button>
+                </div>
+            </div>
+            <div class="table-scroll">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>NIS</th>
+                            <th>Nama</th>
+                            <th>Gender</th>
+                            <th>Nominal</th>
+                            <th>Tanggal</th>
+                            <th>Ket (Bulan)</th>
+                            <th>QR</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Data akan diisi oleh JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===== AREA ADMIN (hanya muncul saat login) ===== -->
+        <div id="adminArea" class="hidden" style="background:var(--card-bg);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);margin-top:20px;">
+            <h2 style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                <i class="fas fa-user-shield" style="color:var(--secondary);"></i>
+                Panel Admin
+                <span style="font-size:13px;font-weight:400;color:var(--text-light);margin-left:auto;">
+                    <i class="fas fa-circle" style="color:var(--success);font-size:10px;"></i> Online
+                </span>
+            </h2>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                <!-- Tambah Setoran -->
+                <div style="background:var(--bg);border-radius:var(--radius-sm);padding:16px;">
+                    <h4><i class="fas fa-plus-circle" style="color:var(--success);"></i> Tambah Setoran</h4>
+                    <div style="margin-top:10px;">
+                        <label>Scan QR / Input NIS</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="text" id="inputNIS" placeholder="Ketik NIS atau scan QR" style="flex:1;" />
+                            <button class="btn btn-primary btn-sm" onclick="scanNIS()"><i class="fas fa-qrcode"></i></button>
+                        </div>
+                        <label style="margin-top:10px;">Nama Siswa</label>
+                        <input type="text" id="inputNama" readonly style="background:#e2e8f0;" />
+                        <label style="margin-top:10px;">Nominal Tambahan (Rp)</label>
+                        <input type="number" id="inputNominal" placeholder="10000" min="10000" step="10000" />
+                        <button class="btn btn-success" style="margin-top:12px;width:100%;" onclick="tambahSetoran()">
+                            <i class="fas fa-save"></i> Simpan Setoran
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Kas Keluar -->
+                <div style="background:var(--bg);border-radius:var(--radius-sm);padding:16px;">
+                    <h4><i class="fas fa-arrow-down" style="color:var(--danger);"></i> Kas Keluar</h4>
+                    <div style="margin-top:10px;">
+                        <label>Keterangan</label>
+                        <input type="text" id="inputKeteranganKeluar" placeholder="Misal: Beli ATK" />
+                        <label style="margin-top:10px;">Jumlah (Rp)</label>
+                        <input type="number" id="inputJumlahKeluar" placeholder="50000" min="1" />
+                        <button class="btn btn-danger" style="margin-top:12px;width:100%;" onclick="tambahKasKeluar()">
+                            <i class="fas fa-minus-circle"></i> Kurangi Saldo
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit / Hapus Tombol di tabel sudah ada -->
+        </div>
+
+    </div>
+
+    <!-- ===== MODAL SCANNER ===== -->
+    <div class="modal-overlay" id="scannerModal">
+        <div class="modal-box">
+            <h2>
+                <i class="fas fa-qrcode"></i> Scan QR Code
+                <button class="close-btn" onclick="closeScanner()">&times;</button>
+            </h2>
+            <p style="color:var(--text-light);font-size:13px;margin-bottom:12px;">
+                Arahkan kamera ke QR Code NIS siswa.
+            </p>
+            <div id="qr-reader"></div>
+            <div style="margin-top:12px;text-align:center;">
+                <button class="btn btn-danger btn-sm" onclick="closeScanner()">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== TOAST CONTAINER ===== -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ===== WHATSAPP FLOATING ===== -->
+    <a href="https://wa.me/6281213825210?text=Assalamu'alaikum%20Mom%20Afif%20mau%20dibantu%20dong%20Infonya%20hari%20ini..."
+    class="wa-floating" target="_blank" rel="noopener noreferrer">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.704 1.459h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+</a>
+
+<!-- ===== FOOTER ===== -->
+<footer class="custom-footer">
+    <p>Made with ❤️ by <span class="author-name">Andrew Dwiranto</span></p>
+    <div class="social-links">
+        <a href="https://www.linkedin.com/in/yudi-dwiranto-cs77" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+        <a href="https://www.instagram.com/cahsragen_77/" target="_blank" rel="noopener noreferrer">Instagram</a>
+        <a href="https://web.facebook.com/ydwiranto" target="_blank" rel="noopener noreferrer">Facebook</a>
+        <a href="https://www.tiktok.com/@selarasdirumah" target="_blank" rel="noopener noreferrer">Tiktok</a>
+    </div>
+</footer>
+
+<!-- ============================================================ -->
+<!-- ===== JAVASCRIPT ===== -->
+<!-- ============================================================ -->
+<script>
+    // ============================================================
+    // 1. KONFIGURASI
+    // ============================================================
+    const CONFIG = {
+        sheetUrl: 'https://docs.google.com/spreadsheets/d/14kyTPwLO9sq-34hV8gd2NyPQ2NOq_5opXdqO3-kG8k0/edit?gid=0#gid=0',
+        gasUrl: 'https://script.google.com/macros/s/AKfycbxVVovItVJmEwB_EC47SL7SFpXDwDEO-UG7se2-SbQTlOPcNt3VdgpuhTITGwnu_9mNJQ/exec',
+        admin: {
+            username: 'admin_pasundan',
+            password: 'Pasundan3_2026'
+        },
+        iuranPerBulan: 10000
+    };
+
+    let isAdmin = false;
+    let dataSiswa = [];
+    let dataKasKeluar = [];
+    let chartGender = null;
+    let chartPayment = null;
+    let qrScannerInstance = null;
+
+    // ============================================================
+    // 2. TOAST NOTIFICATION
+    // ============================================================
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i> ${message}`;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    // ============================================================
+    // 3. LOGIN / LOGOUT
+    // ============================================================
+    function toggleLogin() {
+        if (isAdmin) {
+            isAdmin = false;
+            document.getElementById('adminArea').classList.add('hidden');
+            document.getElementById('loginText').textContent = 'Login Admin';
+            document.getElementById('loginBtn').classList.remove('btn-danger');
+            document.getElementById('loginBtn').classList.add('btn-primary');
+            showToast('Logout berhasil', 'info');
+        } else {
+            const username = prompt('Masukkan Username:');
+            if (!username) return;
+            const password = prompt('Masukkan Password:');
+            if (!password) return;
+            if (username === CONFIG.admin.username && password === CONFIG.admin.password) {
+                isAdmin = true;
+                document.getElementById('adminArea').classList.remove('hidden');
+                document.getElementById('loginText').textContent = 'Logout';
+                document.getElementById('loginBtn').classList.remove('btn-primary');
+                document.getElementById('loginBtn').classList.add('btn-danger');
+                showToast('Login berhasil! Selamat datang Admin.', 'success');
+            } else {
+                showToast('Username atau Password salah!', 'error');
+            }
+        }
+    }
+
+    // ============================================================
+    // 4. LOAD DATA DARI GOOGLE SHEET
+    // ============================================================
+    async function loadData() {
+        try {
+            showToast('Mengambil data...', 'info');
+            const response = await fetch(CONFIG.gasUrl + '?action=getData');
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                // Parse data siswa
+                dataSiswa = result.data.map((row, index) => {
+                    const nominal = parseFloat(row.nominal) || 0;
+                    const ket = row.ket || (nominal > 0 ? (nominal / CONFIG.iuranPerBulan) + ' bulan' : '');
+                    return {
+                        id: index,
+                        no: row.no || index + 1,
+                        nis: row.nis || '',
+                        nama: row.nama_siswa || '',
+                        gender: row.gender ? row.gender.toUpperCase() : '',
+                        nominal: nominal,
+                        tanggal: row.tanggal || '',
+                        ket: ket,
+                        qr: row.qr || '',
+                        status: nominal > 0 ? 'paid' : 'unpaid'
+                    };
+                });
+
+                // Data kas keluar (jika ada dari sheet terpisah)
+                if (result.kasKeluar) {
+                    dataKasKeluar = result.kasKeluar;
+                }
+
+                renderAll();
+                showToast('Data berhasil dimuat!', 'success');
+            } else {
+                // Fallback: gunakan data dummy dari Excel
+                loadDummyData();
+                showToast('Gagal ambil data dari GSheet, menggunakan data lokal.', 'warning');
+            }
+        } catch (error) {
+            console.error('Error loading data:', error);
+            loadDummyData();
+            showToast('Error koneksi, menggunakan data lokal.', 'error');
+        }
+    }
+
+    // ============================================================
+    // 5. DATA DUMMY (dari Excel)
+    // ============================================================
+    function loadDummyData() {
+        dataSiswa = [
+            { id: 0, no: 1, nis: '262707011', nama: 'Adzkiya Livia Marsha', gender: 'P', nominal: 50000,
+                tanggal: '2026-08-11', ket: '5 bulan', status: 'paid' },
+            { id: 1, no: 2, nis: '262707012', nama: 'Afif Ahlan Firdaus', gender: 'L', nominal: 10000,
+                tanggal: '2026-08-12', ket: '1 bulan', status: 'paid' },
+            { id: 2, no: 3, nis: '262707017', nama: 'Ainun Shofie Salsabila', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 3, no: 4, nis: '262707022', nama: 'Akhfan Damantri', gender: 'L', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 4, no: 5, nis: '262707028', nama: 'Aldi Gunawan', gender: 'L', nominal: 0, tanggal: '', ket: '',
+                status: 'unpaid' },
+            { id: 5, no: 6, nis: '262707038', nama: 'Alma Syakira Rosdiana', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 6, no: 7, nis: '262707046', nama: 'Ana Putri Rahayu', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 7, no: 8, nis: '262707047', nama: 'Anatasya Shakila Nur Zahira', gender: 'P', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 8, no: 9, nis: '262707053', nama: 'Anisa Suargana', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 9, no: 10, nis: '262707076', nama: 'Aura Aprilia Putri Dian', gender: 'P', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 10, no: 11, nis: '262707081', nama: 'Azzam Nur Habibi', gender: 'L', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 11, no: 12, nis: '262707101', nama: 'Devina Putri Maulana', gender: 'P', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 12, no: 13, nis: '262707102', nama: 'Devita Jelli Yanti', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 13, no: 14, nis: '262707111', nama: 'Ezra Naufal Attalah', gender: 'L', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 14, no: 15, nis: '262707114', nama: 'Fahri Naufal', gender: 'L', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 15, no: 16, nis: '262707133', nama: 'Irsyad Hakiki Alfarizki', gender: 'L', nominal: 20000,
+                tanggal: '2026-08-12', ket: '2 bulan', status: 'paid' },
+            { id: 16, no: 17, nis: '262707138', nama: 'Jovita Novi Nugraha', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 17, no: 18, nis: '262707141', nama: 'Kafka Dwi Putra Komarudin', gender: 'L', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 18, no: 19, nis: '262707156', nama: 'Kirana Jahira Putri', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 19, no: 20, nis: '262707165', nama: 'Marisa Gracelyn', gender: 'P', nominal: 50000,
+                tanggal: '2026-08-11', ket: '5 bulan', status: 'paid' },
+            { id: 20, no: 21, nis: '262707183', nama: 'Muhammad Elfiansyah Sputra', gender: 'L', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 21, no: 22, nis: '262707191', nama: 'Muhammad Adzikri Rachmadi', gender: 'L', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 22, no: 23, nis: '262707205', nama: 'Muhammad Rajes Cahyana', gender: 'L', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 23, no: 24, nis: '262707208', nama: 'Muhammad Rivky Putra Sobandi', gender: 'L', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 24, no: 25, nis: '262707211', nama: 'Mutyara Septini Putri', gender: 'P', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 25, no: 26, nis: '262707221', nama: 'Nasya Talitha Azalia Gunawan', gender: 'P', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 26, no: 27, nis: '262707223', nama: 'Naura Hazna Alia', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 27, no: 28, nis: '262707231', nama: 'Nayla Azzahra', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 28, no: 29, nis: '262707238', nama: 'Nizam Muhammad Javier', gender: 'L', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 29, no: 30, nis: '262707253', nama: 'Raka Rasyad Fadil', gender: 'L', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 30, no: 31, nis: '262707256', nama: 'Ranishya Putia Maharani', gender: 'P', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 31, no: 32, nis: '262707271', nama: 'Restu Triazmi', gender: 'L', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 32, no: 33, nis: '262707278', nama: 'Rhama Aldzikri Mulyadi', gender: 'L', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 33, no: 34, nis: '262707280', nama: 'Ridwan Alfaruq', gender: 'L', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 34, no: 35, nis: '262707294', nama: 'Selly Zahira Putri', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 35, no: 36, nis: '262707300', nama: 'Silva Guniyanti S', gender: 'P', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 36, no: 37, nis: '262707303', nama: 'Sofia Putri Kurnia Ramadhan', gender: 'P', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 37, no: 38, nis: '262707304', nama: 'Sopian', gender: 'L', nominal: 0, tanggal: '', ket: '',
+                status: 'unpaid' },
+            { id: 38, no: 39, nis: '262707316', nama: 'Wendi Nugraha', gender: 'L', nominal: 0, tanggal: '',
+                ket: '', status: 'unpaid' },
+            { id: 39, no: 40, nis: '262707323', nama: 'Zia Zerlina Putrie Sugianto', gender: 'P', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' },
+            { id: 40, no: 41, nis: '262707325', nama: 'Zilzian Noer Setiawan', gender: 'L', nominal: 0,
+                tanggal: '', ket: '', status: 'unpaid' }
+        ];
+        dataKasKeluar = [];
+        renderAll();
+        showToast('Data lokal dimuat (41 siswa).', 'info');
+    }
+
+    // ============================================================
+    // 6. RENDER SEMUA
+    // ============================================================
+    function renderAll() {
+        renderStats();
+        renderTable();
+        renderCharts();
+    }
+
+    // ============================================================
+    // 7. RENDER STATS
+    // ============================================================
+    function renderStats() {
+        const total = dataSiswa.length;
+        const lCount = dataSiswa.filter(s => s.gender === 'L').length;
+        const pCount = dataSiswa.filter(s => s.gender === 'P').length;
+        const totalNominal = dataSiswa.reduce((sum, s) => sum + s.nominal, 0);
+        const totalKeluar = dataKasKeluar.reduce((sum, k) => sum + (k.jumlah || 0), 0);
+        const saldo = totalNominal - totalKeluar;
+
+        document.getElementById('totalSiswa').textContent = total;
+        document.getElementById('totalL').textContent = lCount;
+        document.getElementById('totalP').textContent = pCount;
+        document.getElementById('totalPemasukan').textContent = 'Rp' + totalNominal.toLocaleString('id-ID');
+        document.getElementById('totalPengeluaran').textContent = 'Rp' + totalKeluar.toLocaleString('id-ID');
+        document.getElementById('saldoAkhir').textContent = 'Rp' + saldo.toLocaleString('id-ID');
+    }
+
+    // ============================================================
+    // 8. RENDER TABEL
+    // ============================================================
+    function renderTable() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const filtered = dataSiswa.filter(s =>
+            s.nama.toLowerCase().includes(search) ||
+            s.nis.includes(search)
+        );
+
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        if (filtered.length === 0) {
+            tbody.innerHTML =
+                '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-light);">Tidak ada data ditemukan</td></tr>';
+            return;
+        }
+
+        filtered.forEach((s, idx) => {
+            const tr = document.createElement('tr');
+            const isPaid = s.nominal > 0;
+            const qrUrl =
+                `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${s.nis}`;
+
+            tr.innerHTML = `
+                <td>${s.no}</td>
+                <td><strong>${s.nis}</strong></td>
+                <td>${s.nama}</td>
+                <td><span class="gender-badge ${s.gender}">${s.gender || '-'}</span></td>
+                <td>${s.nominal > 0 ? 'Rp' + s.nominal.toLocaleString('id-ID') : '-'}</td>
+                <td>${s.tanggal || '-'}</td>
+                <td><span class="status-badge ${isPaid ? 'paid' : 'unpaid'}">${isPaid ? s.ket || s.nominal/CONFIG.iuranPerBulan + ' bulan' : 'Belum bayar'}</span></td>
+                <td><img src="${qrUrl}" alt="QR" class="qr-img" onclick="window.open('${qrUrl}','_blank')" /></td>
+                <td>
+                    <div class="action-btns">
+                        ${isAdmin ? `
+                            <button class="btn btn-success btn-xs" onclick="editSiswa(${s.id})"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-danger btn-xs" onclick="hapusSiswa(${s.id})"><i class="fas fa-trash"></i></button>
+                        ` : `
+                            <span style="font-size:11px;color:var(--text-light);">${isAdmin ? '' : '🔒'}</span>
+                        `}
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ============================================================
+    // 9. RENDER CHARTS
+    // ============================================================
+    function renderCharts() {
+        // Chart Gender & Status
+        const lPaid = dataSiswa.filter(s => s.gender === 'L' && s.nominal > 0).length;
+        const lUnpaid = dataSiswa.filter(s => s.gender === 'L' && s.nominal === 0).length;
+        const pPaid = dataSiswa.filter(s => s.gender === 'P' && s.nominal > 0).length;
+        const pUnpaid = dataSiswa.filter(s => s.gender === 'P' && s.nominal === 0).length;
+
+        const ctx1 = document.getElementById('chartGender').getContext('2d');
+        if (chartGender) chartGender.destroy();
+        chartGender = new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: ['Laki-laki', 'Perempuan'],
+                datasets: [{
+                    label: 'Sudah Bayar',
+                    data: [lPaid, pPaid],
+                    backgroundColor: '#28a745',
+                    borderRadius: 6,
+                }, {
+                    label: 'Belum Bayar',
+                    data: [lUnpaid, pUnpaid],
+                    backgroundColor: '#dc3545',
+                    borderRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 11 } } }
+                },
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+
+        // Chart Payment Status
+        const paid = dataSiswa.filter(s => s.nominal > 0).length;
+        const unpaid = dataSiswa.filter(s => s.nominal === 0).length;
+
+        const ctx2 = document.getElementById('chartPayment').getContext('2d');
+        if (chartPayment) chartPayment.destroy();
+        chartPayment = new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                labels: ['Sudah Bayar', 'Belum Bayar'],
+                datasets: [{
+                    data: [paid, unpaid],
+                    backgroundColor: ['#28a745', '#dc3545'],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 11 } } }
+                },
+                cutout: '70%',
+            }
+        });
+    }
+
+    // ============================================================
+    // 10. QR SCANNER
+    // ============================================================
+    function openScanner() {
+        const modal = document.getElementById('scannerModal');
+        modal.classList.add('active');
+        // Inisialisasi scanner
+        if (!qrScannerInstance) {
+            qrScannerInstance = new Html5Qrcode("qr-reader");
+        }
+        qrScannerInstance.start({ facingMode: "environment" }, {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+        }, onScanSuccess, onScanError);
+    }
+
+    function closeScanner() {
+        const modal = document.getElementById('scannerModal');
+        modal.classList.remove('active');
+        if (qrScannerInstance) {
+            qrScannerInstance.stop().catch(() => {});
+        }
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        // decodedText = NIS
+        closeScanner();
+        const siswa = dataSiswa.find(s => s.nis === decodedText);
+        if (siswa) {
+            document.getElementById('inputNIS').value = siswa.nis;
+            document.getElementById('inputNama').value = siswa.nama;
+            showToast(`Scan berhasil! Siswa: ${siswa.nama}`, 'success');
+            // Jika admin belum login, minta login dulu
+            if (!isAdmin) {
+                showToast('Silakan login sebagai admin untuk menambah setoran.', 'warning');
+                toggleLogin();
+            }
+        } else {
+            showToast(`NIS ${decodedText} tidak ditemukan!`, 'error');
+        }
+    }
+
+    function onScanError(err) {
+        // ignore
+    }
+
+    // ============================================================
+    // 11. SCAN NIS MANUAL
+    // ============================================================
+    function scanNIS() {
+        const nis = document.getElementById('inputNIS').value.trim();
+        if (!nis) {
+            showToast('Masukkan NIS terlebih dahulu!', 'warning');
+            return;
+        }
+        const siswa = dataSiswa.find(s => s.nis === nis);
+        if (siswa) {
+            document.getElementById('inputNama').value = siswa.nama;
+            showToast(`Siswa ditemukan: ${siswa.nama}`, 'success');
+        } else {
+            showToast(`NIS ${nis} tidak ditemukan!`, 'error');
+            document.getElementById('inputNama').value = '';
+        }
+    }
+
+    // ============================================================
+    // 12. TAMBAH SETORAN (ADMIN)
+    // ============================================================
+    function tambahSetoran() {
+        if (!isAdmin) {
+            showToast('Harap login sebagai admin terlebih dahulu!', 'error');
+            return;
+        }
+
+        const nis = document.getElementById('inputNIS').value.trim();
+        const nominal = parseInt(document.getElementById('inputNominal').value);
+        const siswa = dataSiswa.find(s => s.nis === nis);
+
+        if (!siswa) {
+            showToast('NIS tidak valid!', 'error');
+            return;
+        }
+        if (!nominal || nominal < 10000 || nominal % 10000 !== 0) {
+            showToast('Nominal harus kelipatan Rp10.000 dan minimal Rp10.000!', 'warning');
+            return;
+        }
+
+        // Update data
+        const now = new Date();
+        const tanggalStr = now.toISOString().split('T')[0];
+        const jamStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+        siswa.nominal += nominal;
+        siswa.tanggal = tanggalStr;
+        siswa.ket = (siswa.nominal / CONFIG.iuranPerBulan) + ' bulan';
+        siswa.status = 'paid';
+
+        // Kirim ke Google Sheet
+        const payload = {
+            action: 'addSetoran',
+            nis: nis,
+            nominal: nominal,
+            tanggal: tanggalStr,
+            jam: jamStr
+        };
+
+        fetch(CONFIG.gasUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                showToast(`Setoran Rp${nominal.toLocaleString('id-ID')} untuk ${siswa.nama} berhasil!`, 'success');
+                renderAll();
+                // Reset form
+                document.getElementById('inputNominal').value = '';
+                document.getElementById('inputNIS').value = '';
+                document.getElementById('inputNama').value = '';
+            })
+            .catch(err => {
+                showToast('Gagal menyimpan ke GSheet, tetapi data lokal sudah diupdate.', 'warning');
+                renderAll();
+            });
+    }
+
+    // ============================================================
+    // 13. TAMBAH KAS KELUAR (ADMIN)
+    // ============================================================
+    function tambahKasKeluar() {
+        if (!isAdmin) {
+            showToast('Harap login sebagai admin terlebih dahulu!', 'error');
+            return;
+        }
+
+        const keterangan = document.getElementById('inputKeteranganKeluar').value.trim();
+        const jumlah = parseInt(document.getElementById('inputJumlahKeluar').value);
+
+        if (!keterangan) {
+            showToast('Masukkan keterangan pengeluaran!', 'warning');
+            return;
+        }
+        if (!jumlah || jumlah < 1) {
+            showToast('Masukkan jumlah pengeluaran yang valid!', 'warning');
+            return;
+        }
+
+        const now = new Date();
+        const tanggalStr = now.toISOString().split('T')[0];
+        const jamStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+        dataKasKeluar.push({
+            tanggal: tanggalStr,
+            jam: jamStr,
+            keterangan: keterangan,
+            jumlah: jumlah
+        });
+
+        // Kirim ke GSheet
+        const payload = {
+            action: 'addKasKeluar',
+            keterangan: keterangan,
+            jumlah: jumlah,
+            tanggal: tanggalStr,
+            jam: jamStr
+        };
+
+        fetch(CONFIG.gasUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                showToast(`Pengeluaran "${keterangan}" sebesar Rp${jumlah.toLocaleString('id-ID')} berhasil dicatat.`,
+                'success');
+                renderAll();
+                document.getElementById('inputKeteranganKeluar').value = '';
+                document.getElementById('inputJumlahKeluar').value = '';
+            })
+            .catch(err => {
+                showToast('Gagal menyimpan ke GSheet, data lokal sudah diupdate.', 'warning');
+                renderAll();
+            });
+    }
+
+    // ============================================================
+    // 14. EDIT SISWA (ADMIN)
+    // ============================================================
+    function editSiswa(id) {
+        if (!isAdmin) {
+            showToast('Harap login sebagai admin!', 'error');
+            return;
+        }
+        const siswa = dataSiswa.find(s => s.id === id);
+        if (!siswa) return;
+
+        const namaBaru = prompt('Edit Nama:', siswa.nama);
+        if (namaBaru && namaBaru.trim()) {
+            siswa.nama = namaBaru.trim();
+            renderAll();
+            showToast('Data berhasil diupdate!', 'success');
+            // Kirim ke GSheet
+            fetch(CONFIG.gasUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'editSiswa', nis: siswa.nis, nama: siswa.nama })
+                })
+                .catch(() => showToast('Gagal sync ke GSheet, data lokal sudah update.', 'warning'));
+        }
+    }
+
+    // ============================================================
+    // 15. HAPUS SISWA (ADMIN)
+    // ============================================================
+    function hapusSiswa(id) {
+        if (!isAdmin) {
+            showToast('Harap login sebagai admin!', 'error');
+            return;
+        }
+        const siswa = dataSiswa.find(s => s.id === id);
+        if (!siswa) return;
+
+        if (confirm(`Yakin ingin menghapus siswa ${siswa.nama} (${siswa.nis})?`)) {
+            dataSiswa = dataSiswa.filter(s => s.id !== id);
+            renderAll();
+            showToast(`Siswa ${siswa.nama} berhasil dihapus.`, 'success');
+            fetch(CONFIG.gasUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'hapusSiswa', nis: siswa.nis })
+                })
+                .catch(() => showToast('Gagal sync ke GSheet, data lokal sudah dihapus.', 'warning'));
+        }
+    }
+
+    // ============================================================
+    // 16. RESET DATA (ADMIN)
+    // ============================================================
+    function resetData() {
+        if (!isAdmin) {
+            showToast('Harap login sebagai admin!', 'error');
+            return;
+        }
+        if (confirm('⚠️ RESET DATA: Semua data akan dikembalikan ke awal (hanya data dummy). Lanjutkan?')) {
+            loadDummyData();
+            showToast('Data berhasil di-reset ke data awal.', 'info');
+        }
+    }
+
+    // ============================================================
+    // 17. EXPORT EXCEL
+    // ============================================================
+    function exportExcel() {
+        const data = dataSiswa.map(s => ({
+            'No': s.no,
+            'NIS': s.nis,
+            'Nama': s.nama,
+            'Gender': s.gender,
+            'Nominal': s.nominal,
+            'Tanggal': s.tanggal,
+            'Ket (Bulan)': s.ket,
+            'Status': s.nominal > 0 ? 'Sudah Bayar' : 'Belum Bayar'
+        }));
+
+        // Tambahkan summary
+        const totalNominal = dataSiswa.reduce((sum, s) => sum + s.nominal, 0);
+        const totalKeluar = dataKasKeluar.reduce((sum, k) => sum + (k.jumlah || 0), 0);
+        data.push({});
+        data.push({ 'No': 'TOTAL', 'Nominal': totalNominal, 'Status': `Total Siswa: ${dataSiswa.length}` });
+        data.push({ 'No': 'KAS KELUAR', 'Nominal': totalKeluar, 'Status': `Saldo: ${totalNominal - totalKeluar}` });
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
+        XLSX.writeFile(wb, `Laporan_Keuangan_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showToast('Excel berhasil diekspor!', 'success');
+    }
+
+    // ============================================================
+    // 18. EXPORT PDF
+    // ============================================================
+    function exportPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('landscape', 'pt', 'a4');
+
+        // Title
+        doc.setFontSize(18);
+        doc.text('Laporan Keuangan Sekolah Pasundan 3', 40, 40);
+        doc.setFontSize(10);
+        doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 40, 60);
+
+        // Table headers
+        const headers = ['No', 'NIS', 'Nama', 'Gender', 'Nominal', 'Tanggal', 'Ket'];
+        const rows = dataSiswa.map(s => [
+            s.no, s.nis, s.nama, s.gender,
+            s.nominal > 0 ? 'Rp' + s.nominal.toLocaleString('id-ID') : '-',
+            s.tanggal || '-',
+            s.ket || 'Belum bayar'
+        ]);
+
+        doc.autoTable({
+            head: [headers],
+            body: rows,
+            startY: 70,
+            theme: 'grid',
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [26, 58, 92] },
+            didDrawPage: function(data) {
+                doc.setFontSize(8);
+                doc.text('Generated by Dashboard Keuangan Pasundan 3', 40, doc.internal.pageSize.height - 20);
+            }
+        });
+
+        doc.save(`Laporan_Keuangan_${new Date().toISOString().split('T')[0]}.pdf`);
+        showToast('PDF berhasil diekspor!', 'success');
+    }
+
+    // ============================================================
+    // 19. OPEN GSHEET
+    // ============================================================
+    function openGSheet() {
+        window.open(CONFIG.sheetUrl, '_blank');
+        showToast('Membuka Google Sheet...', 'info');
+    }
+
+    // ============================================================
+    // 20. REFRESH DATA
+    // ============================================================
+    function refreshData() {
+        document.getElementById('btnRefresh').innerHTML = '<span class="spinner"></span>';
+        loadData().finally(() => {
+            document.getElementById('btnRefresh').innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+        });
+    }
+
+    // ============================================================
+    // 21. INIT
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        loadData();
+
+        // Auto-login dengan session (bisa disimpan di localStorage)
+        // Untuk keamanan, kita tidak auto-login.
+        // Admin harus login manual setiap kali.
+    });
+
+    // ============================================================
+    // 22. FIX: jsPDF autoTable tidak di-load? kita tambahkan fallback
+    // ============================================================
+    // Pastikan autoTable tersedia untuk PDF
+    if (typeof window.jspdf !== 'undefined') {
+        // autoTable akan di-load dari CDN jika diperlukan
+    }
+
+    console.log('🚀 Dashboard Keuangan Pasundan 3 siap!');
+    console.log('📊 Total siswa:', dataSiswa.length);
+    console.log('🔐 Admin login: admin_pasundan / Pasundan3_2026');
+</script>
+
+<!-- jsPDF autoTable CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js">
+</script>
+
+</body>
+</html>
