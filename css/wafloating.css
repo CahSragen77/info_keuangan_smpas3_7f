@@ -1,0 +1,27 @@
+/* ===== WHATSAPP FLOATING ===== */
+        .wa-floating {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            background: #25d366;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 30px rgba(37, 211, 102, 0.4);
+            z-index: 1500;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+        .wa-floating:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 40px rgba(37, 211, 102, 0.5);
+        }
+        .wa-floating svg {
+            width: 32px;
+            height: 32px;
+            fill: white;
+        }
