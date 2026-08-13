@@ -1002,52 +1002,123 @@
         }
     }
 
-    // ============================================================
-    // 4. LOAD DATA DARI GOOGLE SHEET
-    // ============================================================
-    async function loadData() {
-        try {
-            showToast('Mengambil data...', 'info');
-            const response = await fetch(CONFIG.gasUrl + '?action=getData');
-            const result = await response.json();
+   // ============================================================
+// 4. LOAD DATA DARI GOOGLE SHEET (FIX CORS)
+// ============================================================
+async function loadData() {
+    try {
+        showToast('Mengambil data...', 'info');
+        
+        const response = await fetch(CONFIG.gasUrl + '?action=getData', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+            },
+            // HAPUS mode: 'no-cors' untuk GET
+        });
 
-            if (result.status === 'success') {
-                // Parse data siswa
-                dataSiswa = result.data.map((row, index) => {
-                    const nominal = parseFloat(row.nominal) || 0;
-                    const ket = row.ket || (nominal > 0 ? (nominal / CONFIG.iuranPerBulan) + ' bulan' : '');
-                    return {
-                        id: index,
-                        no: row.no || index + 1,
-                        nis: row.nis || '',
-                        nama: row.nama_siswa || '',
-                        gender: row.gender ? row.gender.toUpperCase() : '',
-                        nominal: nominal,
-                        tanggal: row.tanggal || '',
-                        ket: ket,
-                        qr: row.qr || '',
-                        status: nominal > 0 ? 'paid' : 'unpaid'
-                    };
-                });
+        // Cek response
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-                // Data kas keluar (jika ada dari sheet terpisah)
-                if (result.kasKeluar) {
-                    dataKasKeluar = result.kasKeluar;
-                }
+        const result = await response.json();
+        console.log('📥 Data dari GSheet:', result);
 
-                renderAll();
-                showToast('Data berhasil dimuat!', 'success');
-            } else {
-                // Fallback: gunakan data dummy dari Excel
-                loadDummyData();
-                showToast('Gagal ambil data dari GSheet, menggunakan data lokal.', 'warning');
+        if (result.status === 'success' && result.data && result.data.length > 0) {
+            // Parse data siswa
+            dataSiswa = result.data.map((row, index) => {
+                const nominal = parseFloat(row.nominal) || 0;
+                const ket = row.ket || (nominal > 0 ? (nominal / CONFIG.iuranPerBulan) + ' bulan' : '');
+                return {
+                    id: index,
+                    no: row.no || index + 1,
+                    nis: row.nis || '',
+                    nama: row.nama_siswa || row.nama || '',
+                    gender: row.gender ? row.gender.toUpperCase() : '',
+                    nominal: nominal,
+                    tanggal: row.tanggal || '',
+                    ket: ket,
+                    qr: row.qr || '',
+                    status: nominal > 0 ? 'paid' : 'unpaid'
+                };
+            });
+
+            // Ambil data kas keluar jika ada
+            if (result.kasKeluar) {
+                dataKasKeluar = result.kasKeluar;
             }
-        } catch (error) {
-            console.error('Error loading data:', error);
+
+            renderAll();
+            showToast(`✅ Data berhasil dimuat! (${dataSiswa.length} siswa)`, 'success');
+        } else {
+            // Jika data kosong atau error, pakai data dummy
+            console.warn('⚠️ Data dari GSheet kosong, pakai data lokal.');
             loadDummyData();
-            showToast('Error koneksi, menggunakan data lokal.', 'error');
+            showToast('Data dari GSheet kosong, menggunakan data lokal.', 'warning');
+        }
+
+    } catch (error) {
+        console.error('❌ Error loading data:', error);
+        
+        // Coba dengan mode no-cors sebagai fallback (hanya untuk POST)
+        try {
+            showToast('Mencoba mode alternatif...', 'info');
+            const fallbackResponse = await fetch(CONFIG.gasUrl + '?action=getData', {
+                method: 'GET',
+                mode: 'no-cors',
+            });
+            // no-cors tidak bisa baca response, jadi fallback ke dummy
+            loadDummyData();
+            showToast('⚠️ Mode no-cors: menggunakan data lokal.', 'warning');
+        } catch (fallbackError) {
+            loadDummyData();
+            showToast('❌ Gagal koneksi ke GSheet, menggunakan data lokal.', 'error');
         }
     }
+}
+
+// ============================================================
+// 4b. FUNGSI SAVE KE GSHEET (untuk POST)
+// ============================================================
+async function saveToGSheet(payload) {
+    try {
+        const response = await fetch(CONFIG.gasUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('📤 Save result:', result);
+        return result;
+
+    } catch (error) {
+        console.error('❌ Error saving to GSheet:', error);
+        
+        // Fallback dengan mode no-cors
+        try {
+            await fetch(CONFIG.gasUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+            return { status: 'success', message: 'Data terkirim (mode no-cors)' };
+        } catch (fallbackError) {
+            throw error;
+        }
+    }
+}
 
     // ============================================================
     // 5. DATA DUMMY (dari Excel)
