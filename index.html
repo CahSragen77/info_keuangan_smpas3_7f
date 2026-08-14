@@ -462,7 +462,7 @@
         } else {
             studentsData = JSON.parse(JSON.stringify(defaultStudents));
         }
-        kasKeluar = savedKeluar ? parseInt(savedKeluar) : 0;
+        kasKeluar = (savedKeluar && !isNaN(parseInt(savedKeluar))) ? parseInt(savedKeluar) : 0;
     }
 
     function saveData() {
