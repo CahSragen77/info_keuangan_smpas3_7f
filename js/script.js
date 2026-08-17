@@ -1,778 +1,1175 @@
-// ============================================================
-    // 1. KONFIGURASI
-    // ============================================================
-    const CONFIG = {
-    sheetUrl: 'https://docs.google.com/spreadsheets/d/14kyTPwLO9sq-34hV8gd2NyPQ2NOq_5opXdqO3-kG8k0/edit?gid=0#gid=0',
-    gasUrl: 'https://script.google.com/macros/s/AKfycbwXE29g7kbuIT5XDnqZgssJd2R3zEQXfkI7DERCxwogpC3PWkUAZ18K22OqgIUK3jnzzw/exec', // <-- GANTI INI
-    admin: {
-        username: 'bendahara',      // <-- Sesuai dengan log Anda
-        password: 'Anna@923016'     // <-- Sesuai dengan log Anda
-    },
-    iuranPerBulan: 10000
-};
+ // ================================================================
+        //  DATA & STATE
+        // ================================================================
+        let siswaData = [];
+        let kasKeluarTotal = 0;
+        let pengeluaranData = [];
+        let editIndex = null;
+        let isAdmin = false;
+        let qrScannerInstance = null;
+        let scannerActive = false;
+        let historiData = [];
+        let logData = [];
+        const LOG_KEY = 'logPerubahan';
+        const GAS_URL_KEY = 'gas_webapp_url';
+        const PENGELUARAN_KEY = 'pengeluaranData';
 
-    let isAdmin = false;
-    let dataSiswa = [];
-    let dataKasKeluar = [];
-    let chartGender = null;
-    let chartPayment = null;
-    let qrScannerInstance = null;
+        // ================================================================
+        //  LOG
+        // ================================================================
+        function loadLog() {
+            const stored = localStorage.getItem(LOG_KEY);
+            if (stored) { try { logData = JSON.parse(stored); } catch (e) { logData = []; } } else { logData = []; }
+        }
 
-    // ============================================================
-    // 2. TOAST NOTIFICATION
-    // ============================================================
-    function showToast(message, type = 'info') {
-        const container = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i> ${message}`;
-        container.appendChild(toast);
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(100%)';
-            setTimeout(() => toast.remove(), 300);
-        }, 4000);
-    }
+        function saveLog() { localStorage.setItem(LOG_KEY, JSON.stringify(logData)); }
 
-    // ============================================================
-    // 3. LOGIN / LOGOUT
-    // ============================================================
-    function toggleLogin() {
-        if (isAdmin) {
-            isAdmin = false;
-            document.getElementById('adminArea').classList.add('hidden');
-            document.getElementById('loginText').textContent = 'Login Admin';
-            document.getElementById('loginBtn').classList.remove('btn-danger');
-            document.getElementById('loginBtn').classList.add('btn-primary');
-            showToast('Logout berhasil', 'info');
-        } else {
-            const username = prompt('Masukkan Username:');
-            if (!username) return;
-            const password = prompt('Masukkan Password:');
-            if (!password) return;
-            if (username === CONFIG.admin.username && password === CONFIG.admin.password) {
-                isAdmin = true;
-                document.getElementById('adminArea').classList.remove('hidden');
-                document.getElementById('loginText').textContent = 'Logout';
-                document.getElementById('loginBtn').classList.remove('btn-primary');
-                document.getElementById('loginBtn').classList.add('btn-danger');
-                showToast('Login berhasil! Selamat datang Admin.', 'success');
-            } else {
-                showToast('Username atau Password salah!', 'error');
+        function catatLog(aksi, detail, admin = 'Admin') {
+            const now = new Date();
+            const timestamp = now.toLocaleString('id-ID', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            logData.push({
+                waktu: now.toISOString(),
+                timestamp: timestamp,
+                admin: admin,
+                aksi: aksi,
+                detail: detail
+            });
+            if (logData.length > 100) logData = logData.slice(-100);
+            saveLog();
+            updateNotifikasi();
+            renderLog();
+        }
+
+        function updateNotifikasi() {
+            const banner = document.getElementById('notifikasiUpdate');
+            if (!banner) return;
+            if (logData.length === 0) {
+                banner.innerHTML = '<i class="fas fa-info-circle"></i> Belum ada perubahan data.';
+                return;
+            }
+            const last = logData[logData.length - 1];
+            banner.innerHTML =
+                `<i class="fas fa-sync-alt"></i> Data terakhir diperbarui: <strong>${last.timestamp}</strong> (${last.aksi}: ${last.detail})`;
+        }
+
+        function renderLog() {
+            const tbody = document.getElementById('logBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            const logs = [...logData].reverse();
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="white-space:nowrap;">${log.timestamp}</td>
+                    <td>${log.admin}</td>
+                    <td><span class="badge-soft">${log.aksi}</span></td>
+                    <td>${log.detail}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">Belum ada log</td></tr>';
             }
         }
-    }
 
-   // ============================================================
-// 4. LOAD DATA DARI GOOGLE SHEET (FIX CORS)
-// ============================================================
-async function loadData() {
-    try {
-        showToast('Mengambil data...', 'info');
-        
-        const response = await fetch(CONFIG.gasUrl + '?action=getData', {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-            },
-            // HAPUS mode: 'no-cors' untuk GET
-        });
-
-        // Cek response
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        // ================================================================
+        //  PENGELUARAN DATA
+        // ================================================================
+        function loadPengeluaran() {
+            const stored = localStorage.getItem(PENGELUARAN_KEY);
+            if (stored) { try { pengeluaranData = JSON.parse(stored); } catch (e) { pengeluaranData = []; } } else { pengeluaranData = []; }
         }
 
-        const result = await response.json();
-        console.log('📥 Data dari GSheet:', result);
+        function savePengeluaran() { localStorage.setItem(PENGELUARAN_KEY, JSON.stringify(pengeluaranData)); }
 
-        if (result.status === 'success' && result.data && result.data.length > 0) {
-            // Parse data siswa
-            dataSiswa = result.data.map((row, index) => {
-                const nominal = parseFloat(row.nominal) || 0;
-                const ket = row.ket || (nominal > 0 ? (nominal / CONFIG.iuranPerBulan) + ' bulan' : '');
-                return {
-                    id: index,
-                    no: row.no || index + 1,
-                    nis: row.nis || '',
-                    nama: row.nama_siswa || row.nama || '',
-                    gender: row.gender ? row.gender.toUpperCase() : '',
-                    nominal: nominal,
-                    tanggal: row.tanggal || '',
-                    ket: ket,
-                    qr: row.qr || '',
-                    status: nominal > 0 ? 'paid' : 'unpaid'
-                };
-            });
-
-            // Ambil data kas keluar jika ada
-            if (result.kasKeluar) {
-                dataKasKeluar = result.kasKeluar;
-            }
-
-            renderAll();
-            showToast(`✅ Data berhasil dimuat! (${dataSiswa.length} siswa)`, 'success');
-        } else {
-            // Jika data kosong atau error, pakai data dummy
-            console.warn('⚠️ Data dari GSheet kosong, pakai data lokal.');
-            loadDummyData();
-            showToast('Data dari GSheet kosong, menggunakan data lokal.', 'warning');
-        }
-
-    } catch (error) {
-        console.error('❌ Error loading data:', error);
-        
-        // Coba dengan mode no-cors sebagai fallback (hanya untuk POST)
-        try {
-            showToast('Mencoba mode alternatif...', 'info');
-            const fallbackResponse = await fetch(CONFIG.gasUrl + '?action=getData', {
-                method: 'GET',
-                mode: 'no-cors',
-            });
-            // no-cors tidak bisa baca response, jadi fallback ke dummy
-            loadDummyData();
-            showToast('⚠️ Mode no-cors: menggunakan data lokal.', 'warning');
-        } catch (fallbackError) {
-            loadDummyData();
-            showToast('❌ Gagal koneksi ke GSheet, menggunakan data lokal.', 'error');
-        }
-    }
-}
-
-// ============================================================
-// 4b. FUNGSI SAVE KE GSHEET (untuk POST)
-// ============================================================
-async function saveToGSheet(payload) {
-    try {
-        const response = await fetch(CONFIG.gasUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-        console.log('📤 Save result:', result);
-        return result;
-
-    } catch (error) {
-        console.error('❌ Error saving to GSheet:', error);
-        
-        // Fallback dengan mode no-cors
-        try {
-            await fetch(CONFIG.gasUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
-            });
-            return { status: 'success', message: 'Data terkirim (mode no-cors)' };
-        } catch (fallbackError) {
-            throw error;
-        }
-    }
-}
-
-    // ============================================================
-    // 5. DATA DUMMY (dari Excel)
-    // ============================================================
-    function loadDummyData() {
-        dataSiswa = [
-            { id: 0, no: 1, nis: '262707011', nama: 'Adzkiya Livia Marsha', gender: 'P', nominal: 50000,
-                tanggal: '2026-08-11', ket: '5 bulan', status: 'paid' },
-            { id: 1, no: 2, nis: '262707012', nama: 'Afif Ahlan Firdaus', gender: 'L', nominal: 10000,
-                tanggal: '2026-08-12', ket: '1 bulan', status: 'paid' },
-            { id: 2, no: 3, nis: '262707017', nama: 'Ainun Shofie Salsabila', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 3, no: 4, nis: '262707022', nama: 'Akhfan Damantri', gender: 'L', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 4, no: 5, nis: '262707028', nama: 'Aldi Gunawan', gender: 'L', nominal: 0, tanggal: '', ket: '',
-                status: 'unpaid' },
-            { id: 5, no: 6, nis: '262707038', nama: 'Alma Syakira Rosdiana', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 6, no: 7, nis: '262707046', nama: 'Ana Putri Rahayu', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 7, no: 8, nis: '262707047', nama: 'Anatasya Shakila Nur Zahira', gender: 'P', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 8, no: 9, nis: '262707053', nama: 'Anisa Suargana', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 9, no: 10, nis: '262707076', nama: 'Aura Aprilia Putri Dian', gender: 'P', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 10, no: 11, nis: '262707081', nama: 'Azzam Nur Habibi', gender: 'L', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 11, no: 12, nis: '262707101', nama: 'Devina Putri Maulana', gender: 'P', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 12, no: 13, nis: '262707102', nama: 'Devita Jelli Yanti', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 13, no: 14, nis: '262707111', nama: 'Ezra Naufal Attalah', gender: 'L', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 14, no: 15, nis: '262707114', nama: 'Fahri Naufal', gender: 'L', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 15, no: 16, nis: '262707133', nama: 'Irsyad Hakiki Alfarizki', gender: 'L', nominal: 20000,
-                tanggal: '2026-08-12', ket: '2 bulan', status: 'paid' },
-            { id: 16, no: 17, nis: '262707138', nama: 'Jovita Novi Nugraha', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 17, no: 18, nis: '262707141', nama: 'Kafka Dwi Putra Komarudin', gender: 'L', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 18, no: 19, nis: '262707156', nama: 'Kirana Jahira Putri', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 19, no: 20, nis: '262707165', nama: 'Marisa Gracelyn', gender: 'P', nominal: 50000,
-                tanggal: '2026-08-11', ket: '5 bulan', status: 'paid' },
-            { id: 20, no: 21, nis: '262707183', nama: 'Muhammad Elfiansyah Sputra', gender: 'L', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 21, no: 22, nis: '262707191', nama: 'Muhammad Adzikri Rachmadi', gender: 'L', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 22, no: 23, nis: '262707205', nama: 'Muhammad Rajes Cahyana', gender: 'L', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 23, no: 24, nis: '262707208', nama: 'Muhammad Rivky Putra Sobandi', gender: 'L', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 24, no: 25, nis: '262707211', nama: 'Mutyara Septini Putri', gender: 'P', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 25, no: 26, nis: '262707221', nama: 'Nasya Talitha Azalia Gunawan', gender: 'P', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 26, no: 27, nis: '262707223', nama: 'Naura Hazna Alia', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 27, no: 28, nis: '262707231', nama: 'Nayla Azzahra', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 28, no: 29, nis: '262707238', nama: 'Nizam Muhammad Javier', gender: 'L', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 29, no: 30, nis: '262707253', nama: 'Raka Rasyad Fadil', gender: 'L', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 30, no: 31, nis: '262707256', nama: 'Ranishya Putia Maharani', gender: 'P', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 31, no: 32, nis: '262707271', nama: 'Restu Triazmi', gender: 'L', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 32, no: 33, nis: '262707278', nama: 'Rhama Aldzikri Mulyadi', gender: 'L', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 33, no: 34, nis: '262707280', nama: 'Ridwan Alfaruq', gender: 'L', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 34, no: 35, nis: '262707294', nama: 'Selly Zahira Putri', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 35, no: 36, nis: '262707300', nama: 'Silva Guniyanti S', gender: 'P', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 36, no: 37, nis: '262707303', nama: 'Sofia Putri Kurnia Ramadhan', gender: 'P', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 37, no: 38, nis: '262707304', nama: 'Sopian', gender: 'L', nominal: 0, tanggal: '', ket: '',
-                status: 'unpaid' },
-            { id: 38, no: 39, nis: '262707316', nama: 'Wendi Nugraha', gender: 'L', nominal: 0, tanggal: '',
-                ket: '', status: 'unpaid' },
-            { id: 39, no: 40, nis: '262707323', nama: 'Zia Zerlina Putrie Sugianto', gender: 'P', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' },
-            { id: 40, no: 41, nis: '262707325', nama: 'Zilzian Noer Setiawan', gender: 'L', nominal: 0,
-                tanggal: '', ket: '', status: 'unpaid' }
+        // ================================================================
+        //  DATA DEFAULT (41 siswa)
+        // ================================================================
+        const DEFAULT_DATA = [
+            { nis: "2627.07011", nama: "Adzkiya Livia Marsha", gender: "P", nominal: 50000, tanggal: "2026-11-08",
+                ket: "5 bln", status: "Sudah Bayar" },
+            { nis: "2627.07012", nama: "Afif Ahlan Firdaus", gender: "L", nominal: 10000, tanggal: "2026-12-08",
+                ket: "1 bln", status: "Sudah Bayar" },
+            { nis: "2627.07017", nama: "Ainun Shofie Salsabila", gender: "P", nominal: 30000, tanggal: "2026-08-12",
+                ket: "3 bln", status: "Sudah Bayar" },
+            { nis: "2627.07022", nama: "Akhfan Damantri", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07028", nama: "Aldi Gunawan", gender: "L", nominal: 30000, tanggal: "2026-08-13", ket: "3 bln",
+                status: "Sudah Bayar" },
+            { nis: "2627.07038", nama: "Alma Syakira Rosdiana", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07046", nama: "Ana Putri Rahayu", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07047", nama: "Anatasya Shakila Nur Zahira", gender: "P", nominal: 50000, tanggal: "2026-08-11",
+                ket: "5 bln", status: "Sudah Bayar" },
+            { nis: "2627.07053", nama: "Anisa Suargana", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07076", nama: "Aura Aprilia Putri Dian", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07081", nama: "Azzam Nur Habibi", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07101", nama: "Devina Putri Maulana", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07102", nama: "Devita Jelli Yanti", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07111", nama: "Ezra Naufal Attalah", gender: "L", nominal: 30000, tanggal: "2026-08-13",
+                ket: "3 bln", status: "Sudah Bayar" },
+            { nis: "2627.07114", nama: "Fahri Naufal", gender: "L", nominal: 20000, tanggal: "2026-08-14", ket: "2 bln",
+                status: "Sudah Bayar" },
+            { nis: "2627.07133", nama: "Irsyad Hakiki Alfarizki", gender: "L", nominal: 20000, tanggal: "2026-08-14",
+                ket: "2 bln", status: "Sudah Bayar" },
+            { nis: "2627.07138", nama: "Jovita Novi Nugraha", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07141", nama: "Kafka Dwi Putra Komarudin", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07156", nama: "Kirana Jahira Putri", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07165", nama: "Marisa Gracelyn", gender: "P", nominal: 50000, tanggal: "2026-08-11",
+                ket: "5 bln", status: "Sudah Bayar" },
+            { nis: "2627.07183", nama: "Muhammad Elfiansyah Sputra", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07191", nama: "Muhammad Adzikri Rachmadi", gender: "L", nominal: 10000, tanggal: "2026-08-14",
+                ket: "1 bln", status: "Sudah Bayar" },
+            { nis: "2627.07205", nama: "Muhammad Rajes Cahyana", gender: "L", nominal: 20000, tanggal: "2026-08-15",
+                ket: "2 bln", status: "Sudah Bayar" },
+            { nis: "2627.07208", nama: "Muhammad Rivky Putra Sobandi", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07211", nama: "Mutyara Septini Putri", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07221", nama: "Nasya Talitha Azalia Gunawan", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07223", nama: "Naura Hazna Alia", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07231", nama: "Nayla Azzahra", gender: "P", nominal: 30000, tanggal: "2026-08-14", ket: "3 bln",
+                status: "Sudah Bayar" },
+            { nis: "2627.07238", nama: "Nizam Muhammad Javier", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07253", nama: "Raka Rasyad Fadil", gender: "L", nominal: 50000, tanggal: "2026-08-14",
+                ket: "5 bln", status: "Sudah Bayar" },
+            { nis: "2627.07256", nama: "Ranishya Putia Maharani", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07271", nama: "Restu Triazmi", gender: "L", nominal: 0, tanggal: "", ket: "",
+            status: "Belum Bayar" },
+            { nis: "2627.07278", nama: "Rhama Aldzikri Mulyadi", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07280", nama: "Ridwan Alfaruq", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07294", nama: "Selly Zahira Putri", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07300", nama: "Silva Guniyanti S", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07303", nama: "Sofia Putri Kurnia Ramadhan", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07304", nama: "Sopian", gender: "L", nominal: 0, tanggal: "", ket: "", status: "Belum Bayar" },
+            { nis: "2627.07316", nama: "Wendi Nugraha", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07323", nama: "Zia Zerlina Putrie Sugianto", gender: "P", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" },
+            { nis: "2627.07325", nama: "Zilzian Noer Setiawan", gender: "L", nominal: 0, tanggal: "", ket: "",
+                status: "Belum Bayar" }
         ];
-        dataKasKeluar = [];
-        renderAll();
-        showToast('Data lokal dimuat (41 siswa).', 'info');
-    }
 
-    // ============================================================
-    // 6. RENDER SEMUA
-    // ============================================================
-    function renderAll() {
-        renderStats();
-        renderTable();
-        renderCharts();
-    }
-
-    // ============================================================
-    // 7. RENDER STATS
-    // ============================================================
-    function renderStats() {
-        const total = dataSiswa.length;
-        const lCount = dataSiswa.filter(s => s.gender === 'L').length;
-        const pCount = dataSiswa.filter(s => s.gender === 'P').length;
-        const totalNominal = dataSiswa.reduce((sum, s) => sum + s.nominal, 0);
-        const totalKeluar = dataKasKeluar.reduce((sum, k) => sum + (k.jumlah || 0), 0);
-        const saldo = totalNominal - totalKeluar;
-
-        document.getElementById('totalSiswa').textContent = total;
-        document.getElementById('totalL').textContent = lCount;
-        document.getElementById('totalP').textContent = pCount;
-        document.getElementById('totalPemasukan').textContent = 'Rp' + totalNominal.toLocaleString('id-ID');
-        document.getElementById('totalPengeluaran').textContent = 'Rp' + totalKeluar.toLocaleString('id-ID');
-        document.getElementById('saldoAkhir').textContent = 'Rp' + saldo.toLocaleString('id-ID');
-    }
-
-    // ============================================================
-    // 8. RENDER TABEL
-    // ============================================================
-    function renderTable() {
-        const search = document.getElementById('searchInput').value.toLowerCase();
-        const filtered = dataSiswa.filter(s =>
-            s.nama.toLowerCase().includes(search) ||
-            s.nis.includes(search)
-        );
-
-        const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '';
-
-        if (filtered.length === 0) {
-            tbody.innerHTML =
-                '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-light);">Tidak ada data ditemukan</td></tr>';
-            return;
+        // ================================================================
+        //  LOAD / SAVE SISWA
+        // ================================================================
+        function loadData() {
+            const stored = localStorage.getItem('siswaData');
+            const storedKas = localStorage.getItem('kasKeluarTotal');
+            if (stored) {
+                try { siswaData = JSON.parse(stored); } catch (e) { siswaData = JSON.parse(JSON.stringify(DEFAULT_DATA)); }
+            } else {
+                siswaData = JSON.parse(JSON.stringify(DEFAULT_DATA));
+                normalizeData();
+            }
+            if (storedKas) kasKeluarTotal = parseFloat(storedKas) || 0;
+            else kasKeluarTotal = 0;
+            saveData();
+            saveKas();
         }
 
-        filtered.forEach((s, idx) => {
-            const tr = document.createElement('tr');
-            const isPaid = s.nominal > 0;
-            const qrUrl =
-                `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${s.nis}`;
+        function normalizeData() {
+            siswaData.forEach(s => {
+                if (s.nominal > 0 && !s.ket) s.ket = Math.floor(s.nominal / 10000) + ' bln';
+                if (s.nominal > 0 && !s.status) s.status = 'Sudah Bayar';
+                if (s.nominal === 0 && !s.status) s.status = 'Belum Bayar';
+                if (!s.tanggal && s.nominal > 0) s.tanggal = new Date().toISOString().slice(0, 10);
+                if (!s.gender) s.gender = 'L';
+                if (!s.nis) s.nis = 'N/A';
+                if (!s.nama) s.nama = 'Tidak Diketahui';
+            });
+        }
 
-            tr.innerHTML = `
-                <td>${s.no}</td>
-                <td><strong>${s.nis}</strong></td>
-                <td>${s.nama}</td>
-                <td><span class="gender-badge ${s.gender}">${s.gender || '-'}</span></td>
-                <td>${s.nominal > 0 ? 'Rp' + s.nominal.toLocaleString('id-ID') : '-'}</td>
-                <td>${s.tanggal || '-'}</td>
-                <td><span class="status-badge ${isPaid ? 'paid' : 'unpaid'}">${isPaid ? s.ket || s.nominal/CONFIG.iuranPerBulan + ' bulan' : 'Belum bayar'}</span></td>
-                <td><img src="${qrUrl}" alt="QR" class="qr-img" onclick="window.open('${qrUrl}','_blank')" /></td>
-                <td>
-                    <div class="action-btns">
-                        ${isAdmin ? `
-                            <button class="btn btn-success btn-xs" onclick="editSiswa(${s.id})"><i class="fas fa-edit"></i></button>
-                            <button class="btn btn-danger btn-xs" onclick="hapusSiswa(${s.id})"><i class="fas fa-trash"></i></button>
-                        ` : `
-                            <span style="font-size:11px;color:var(--text-light);">${isAdmin ? '' : '🔒'}</span>
-                        `}
-                    </div>
-                </td>
+        function saveData() { localStorage.setItem('siswaData', JSON.stringify(siswaData)); }
+
+        function saveKas() { localStorage.setItem('kasKeluarTotal', String(kasKeluarTotal)); }
+
+        // ================================================================
+        //  RENDER TABLE
+        // ================================================================
+        function renderTable() {
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            const statusFilter = document.getElementById('statusFilter').value;
+            let filtered = siswaData.filter((s) => {
+                const matchNama = s.nama.toLowerCase().includes(search);
+                const matchNis = s.nis.toLowerCase().includes(search);
+                const matchStatus = statusFilter === 'all' || s.status === statusFilter;
+                return (matchNama || matchNis) && matchStatus;
+            });
+
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            filtered.forEach((s, idx) => {
+                const tr = document.createElement('tr');
+                const qrUrl =
+                    `https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent(s.nis)}`;
+                const showActions = isAdmin;
+                tr.innerHTML = `
+                    <td>${idx + 1}</td>
+                    <td><strong>${s.nis}</strong></td>
+                    <td>${s.nama}</td>
+                    <td>${s.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</td>
+                    <td>Rp${formatNumber(s.nominal)}</td>
+                    <td>${s.tanggal || '-'}</td>
+                    <td>${s.ket || '-'}</td>
+                    <td><span class="status-badge ${s.status === 'Sudah Bayar' ? 'status-sudah' : 'status-belum'}">${s.status}</span></td>
+                    <td class="qr-code"><img src="${qrUrl}" alt="QR" loading="lazy" /></td>
+                    <td>
+                        ${showActions ? `
+                        <div class="action-btns">
+                            <button class="edit-btn" onclick="editSiswa(${idx})" title="Edit"><i class="fas fa-pen"></i></button>
+                            <button class="delete-btn" onclick="hapusSiswa(${idx})" title="Hapus"><i class="fas fa-trash"></i></button>
+                        </div>` : `<span class="text-xs text-muted"><i class="fas fa-lock"></i> read-only</span>`}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const footer = document.getElementById('tableFooter');
+            const totalNominal = siswaData.reduce((sum, s) => sum + (s.nominal || 0), 0);
+            const totalSiswa = siswaData.length;
+            footer.innerHTML = `
+                <tr class="total-row">
+                    <td colspan="4" style="text-align:right;">TOTAL</td>
+                    <td>Rp${formatNumber(totalNominal)}</td>
+                    <td colspan="2"></td>
+                    <td>Total Siswa: ${totalSiswa}</td>
+                    <td colspan="2"></td>
+                </tr>
             `;
-            tbody.appendChild(tr);
-        });
-    }
 
-    // ============================================================
-    // 9. RENDER CHARTS
-    // ============================================================
-    function renderCharts() {
-        // Chart Gender & Status
-        const lPaid = dataSiswa.filter(s => s.gender === 'L' && s.nominal > 0).length;
-        const lUnpaid = dataSiswa.filter(s => s.gender === 'L' && s.nominal === 0).length;
-        const pPaid = dataSiswa.filter(s => s.gender === 'P' && s.nominal > 0).length;
-        const pUnpaid = dataSiswa.filter(s => s.gender === 'P' && s.nominal === 0).length;
+            const sudah = siswaData.filter(s => s.status === 'Sudah Bayar').length;
+            const belum = siswaData.filter(s => s.status === 'Belum Bayar').length;
+            const totalMasuk = siswaData.reduce((sum, s) => sum + (s.nominal || 0), 0);
+            const saldo = totalMasuk - kasKeluarTotal;
+            const persenSudah = totalSiswa > 0 ? Math.round((sudah / totalSiswa) * 100) : 0;
+            const persenBelum = totalSiswa > 0 ? Math.round((belum / totalSiswa) * 100) : 0;
 
-        const ctx1 = document.getElementById('chartGender').getContext('2d');
-        if (chartGender) chartGender.destroy();
-        chartGender = new Chart(ctx1, {
-            type: 'bar',
-            data: {
-                labels: ['Laki-laki', 'Perempuan'],
-                datasets: [{
-                    label: 'Sudah Bayar',
-                    data: [lPaid, pPaid],
-                    backgroundColor: '#28a745',
-                    borderRadius: 6,
-                }, {
-                    label: 'Belum Bayar',
-                    data: [lUnpaid, pUnpaid],
-                    backgroundColor: '#dc3545',
-                    borderRadius: 6,
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'bottom', labels: { font: { size: 11 } } }
+            document.getElementById('totalSiswa').textContent = totalSiswa;
+            document.getElementById('sudahBayar').textContent = sudah;
+            document.getElementById('belumBayar').textContent = belum;
+            document.getElementById('sudahBayarPersen').textContent = persenSudah + '%';
+            document.getElementById('belumBayarPersen').textContent = persenBelum + '%';
+            document.getElementById('totalMasuk').textContent = 'Rp' + formatNumber(totalMasuk);
+            document.getElementById('totalKeluar').textContent = 'Rp' + formatNumber(kasKeluarTotal);
+            document.getElementById('saldo').textContent = 'Rp' + formatNumber(saldo);
+            document.getElementById('saldoSub').textContent =
+                `Kas masuk Rp${formatNumber(totalMasuk)} - keluar Rp${formatNumber(kasKeluarTotal)}`;
+
+            updateCharts();
+            renderLog();
+        }
+
+        function formatNumber(n) { return Number(n).toLocaleString('id-ID'); }
+
+        // ================================================================
+        //  CHARTS
+        // ================================================================
+        let statusChartInstance = null,
+            genderChartInstance = null;
+
+        function updateCharts() {
+            const statusCount = { 'Sudah Bayar': 0, 'Belum Bayar': 0 };
+            const genderCount = { 'L': 0, 'P': 0 };
+            siswaData.forEach(s => {
+                if (s.status === 'Sudah Bayar') statusCount['Sudah Bayar']++;
+                else statusCount['Belum Bayar']++;
+                if (s.gender === 'L') genderCount['L']++;
+                else if (s.gender === 'P') genderCount['P']++;
+            });
+
+            const ctx1 = document.getElementById('statusChart').getContext('2d');
+            const ctx2 = document.getElementById('genderChart').getContext('2d');
+
+            if (statusChartInstance) statusChartInstance.destroy();
+            statusChartInstance = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Sudah Bayar', 'Belum Bayar'],
+                    datasets: [{ data: [statusCount['Sudah Bayar'], statusCount['Belum Bayar']], backgroundColor: [
+                            '#10b981', '#ef4444'
+                        ], borderWidth: 0, hoverOffset: 8 }]
                 },
-                scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                options: {
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11,
+                                family: 'Inter' }, padding: 12 } } },
+                    maintainAspectRatio: true,
+                    responsive: true,
+                    cutout: '68%'
+                }
+            });
+
+            if (genderChartInstance) genderChartInstance.destroy();
+            genderChartInstance = new Chart(ctx2, {
+                type: 'pie',
+                data: {
+                    labels: ['Laki-laki', 'Perempuan'],
+                    datasets: [{ data: [genderCount['L'], genderCount['P']], backgroundColor: ['#2a5298',
+                            '#e84393'], borderWidth: 0, hoverOffset: 8 }]
+                },
+                options: {
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11,
+                                family: 'Inter' }, padding: 12 } } },
+                    maintainAspectRatio: true,
+                    responsive: true
+                }
+            });
+        }
+
+        // ================================================================
+        //  CRUD
+        // ================================================================
+        function editSiswa(index) {
+            if (!isAdmin) { toast('Login dulu untuk mengedit', 'warning'); return; }
+            const s = siswaData[index];
+            editIndex = index;
+            document.getElementById('editNis').value = s.nis;
+            document.getElementById('editNama').value = s.nama;
+            document.getElementById('editGender').value = s.gender;
+            document.getElementById('editNominal').value = s.nominal || 0;
+            document.getElementById('editTanggal').value = s.tanggal || '';
+            document.getElementById('editStatus').value = s.status || 'Belum Bayar';
+            document.getElementById('adminPanel').classList.add('visible');
+            document.getElementById('adminPanel').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function simpanEdit() {
+            if (!isAdmin) { toast('Login dulu', 'warning'); return; }
+            if (editIndex === null) { toast('Pilih siswa terlebih dahulu', 'warning'); return; }
+            const nis = document.getElementById('editNis').value.trim();
+            const nama = document.getElementById('editNama').value.trim();
+            const gender = document.getElementById('editGender').value;
+            let nominal = parseFloat(document.getElementById('editNominal').value) || 0;
+            const tanggal = document.getElementById('editTanggal').value;
+            const status = document.getElementById('editStatus').value;
+            if (!nis || !nama) { toast('NIS dan Nama wajib diisi', 'error'); return; }
+            const ket = nominal > 0 ? Math.floor(nominal / 10000) + ' bln' : '';
+
+            const oldData = siswaData[editIndex];
+            const perubahan = [];
+            if (oldData.nama !== nama) perubahan.push('nama: ' + oldData.nama + ' → ' + nama);
+            if (oldData.nominal !== nominal) perubahan.push('nominal: ' + oldData.nominal + ' → ' + nominal);
+            if (oldData.status !== status) perubahan.push('status: ' + oldData.status + ' → ' + status);
+            if (oldData.gender !== gender) perubahan.push('gender: ' + oldData.gender + ' → ' + gender);
+            if (oldData.tanggal !== tanggal) perubahan.push('tanggal: ' + oldData.tanggal + ' → ' + tanggal);
+            if (perubahan.length === 0) perubahan.push('tidak ada perubahan');
+
+            siswaData[editIndex] = { nis, nama, gender, nominal, tanggal, ket, status };
+            saveData();
+            renderTable();
+            catatLog('Edit Siswa', `NIS ${nis} (${nama}) - ${perubahan.join('; ')}`);
+            toast('Data berhasil diperbarui', 'success');
+            editIndex = null;
+        }
+
+        function hapusSiswa(index) {
+            if (!isAdmin) { toast('Login dulu', 'warning'); return; }
+            if (!confirm('Yakin hapus data ini?')) return;
+            const s = siswaData[index];
+            siswaData.splice(index, 1);
+            saveData();
+            renderTable();
+            catatLog('Hapus Siswa', `NIS ${s.nis} (${s.nama}) - nominal Rp${s.nominal}`);
+            toast('Data dihapus', 'success');
+        }
+
+        function hapusTerpilih() {
+            if (!isAdmin) { toast('Login dulu', 'warning'); return; }
+            if (editIndex !== null) {
+                const s = siswaData[editIndex];
+                siswaData.splice(editIndex, 1);
+                editIndex = null;
+                saveData();
+                renderTable();
+                catatLog('Hapus Siswa', `NIS ${s.nis} (${s.nama}) - nominal Rp${s.nominal}`);
+                toast('Data dihapus', 'success');
+                document.getElementById('adminPanel').classList.remove('visible');
+            } else {
+                toast('Pilih data yang akan dihapus (klik edit dulu)', 'warning');
+            }
+        }
+
+        function resetData() {
+            if (!isAdmin) { toast('Login dulu', 'warning'); return; }
+            if (!confirm('⚠️ Reset semua data ke default? Semua perubahan akan hilang!')) return;
+            siswaData = JSON.parse(JSON.stringify(DEFAULT_DATA));
+            normalizeData();
+            kasKeluarTotal = 0;
+            saveData();
+            saveKas();
+            renderTable();
+            catatLog('Reset Data', 'Semua data dikembalikan ke default');
+            toast('Data direset ke default', 'success');
+            document.getElementById('adminPanel').classList.remove('visible');
+        }
+
+        // ================================================================
+        //  TAMBAH SETORAN
+        // ================================================================
+        function tambahSetoran() {
+            if (!isAdmin) { toast('Login dulu', 'warning'); return; }
+            const nis = document.getElementById('editNis').value.trim();
+            if (!nis) { toast('Masukkan NIS di form edit', 'warning'); return; }
+            const idx = siswaData.findIndex(s => s.nis === nis);
+            if (idx === -1) { toast('NIS tidak ditemukan', 'error'); return; }
+            const nominalTambahan = 10000;
+            const now = new Date();
+            const tanggalStr = now.toISOString().slice(0, 10);
+            siswaData[idx].nominal = (siswaData[idx].nominal || 0) + nominalTambahan;
+            siswaData[idx].tanggal = tanggalStr;
+            siswaData[idx].ket = Math.floor(siswaData[idx].nominal / 10000) + ' bln';
+            siswaData[idx].status = 'Sudah Bayar';
+            saveData();
+            renderTable();
+            catatLog('Tambah Setoran', `NIS ${nis} (${siswaData[idx].nama}) +Rp10.000 (total Rp${siswaData[idx].nominal})`);
+            toast(`Setoran Rp10.000 untuk ${siswaData[idx].nama} berhasil`, 'success');
+        }
+
+        // ================================================================
+        //  KAS KELUAR
+        // ================================================================
+        function tambahKasKeluar() {
+            if (!isAdmin) { toast('Login dulu', 'warning'); return; }
+            const input = document.getElementById('kasKeluarInput');
+            const val = parseFloat(input.value);
+            if (!val || val <= 0) { toast('Masukkan nominal pengeluaran yang valid', 'warning'); return; }
+            const deskripsi = prompt('Deskripsi pengeluaran (opsional):', 'Pengeluaran kas') || 'Pengeluaran kas';
+            const now = new Date();
+            const tanggalStr = now.toISOString().slice(0, 10);
+            pengeluaranData.push({
+                tanggal: tanggalStr,
+                deskripsi: deskripsi,
+                nominal: val
+            });
+            savePengeluaran();
+            kasKeluarTotal += val;
+            saveKas();
+            renderTable();
+            catatLog('Kas Keluar', `Rp${formatNumber(val)} - ${deskripsi}`);
+            toast(`Pengeluaran Rp${formatNumber(val)} dicatat`, 'success');
+            input.value = '';
+        }
+
+        // ================================================================
+        //  EXPORT MAIN (Excel, PDF, Google Sheet)
+        // ================================================================
+        function exportExcel() {
+            const data = siswaData.map((s, idx) => ({
+                'No': idx + 1,
+                'NIS': s.nis,
+                'Nama Siswa': s.nama,
+                'L/P': s.gender,
+                'Nominal Masuk': s.nominal || 0,
+                'Ket': s.ket || '',
+                'Tanggal': s.tanggal || ''
+            }));
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(data);
+            XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
+            XLSX.writeFile(wb, `Laporan_Keuangan_${new Date().toISOString().slice(0,10)}.xlsx`);
+            toast('Excel berhasil diunduh', 'success');
+        }
+
+        function exportPDF() {
+            const totalSiswa = siswaData.length;
+            const totalMasuk = siswaData.reduce((sum, s) => sum + (s.nominal || 0), 0);
+            const saldo = totalMasuk - kasKeluarTotal;
+            const now = new Date();
+            const tanggalCetak = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'numeric', year: 'numeric' });
+
+            let rows = '';
+            siswaData.forEach((s, idx) => {
+                const no = idx + 1;
+                const nis = s.nis || '-';
+                const nama = s.nama || '-';
+                const gender = s.gender || '-';
+                const nominal = s.nominal || 0;
+                const ket = s.ket || '-';
+                const tgl = s.tanggal || '-';
+                rows += `<tr>
+                    <td style="text-align:center;">${no}</td>
+                    <td style="text-align:center;">${nis}</td>
+                    <td class="left">${nama}</td>
+                    <td style="text-align:center;">${gender}</td>
+                    <td style="text-align:right;padding-right:6px;">Rp ${formatNumber(nominal)}</td>
+                    <td style="text-align:center;">${ket}</td>
+                    <td style="text-align:center;">${tgl}</td>
+                </tr>`;
+            });
+
+            const pdfHtml = `
+            <div class="pdf-report">
+                <div class="pdf-header">
+                    <h1>SMP Pasundan 3</h1>
+                    <h2>Laporan Administrasi Keuangan &amp; Iuran Siswa</h2>
+                    <div class="date">Tanggal Cetak: ${tanggalCetak}</div>
+                </div>
+                <div class="pdf-summary">
+                    <span>Total Siswa: ${totalSiswa}</span> |
+                    <span>Total Masuk: Rp ${formatNumber(totalMasuk)}</span> |
+                    <span>Kas Keluar: Rp ${formatNumber(kasKeluarTotal)}</span> |
+                    <span>Saldo Bersih: Rp ${formatNumber(saldo)}</span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:6%;">No</th>
+                            <th style="width:14%;">NIS</th>
+                            <th style="width:28%;">Nama Siswa</th>
+                            <th style="width:6%;">L/P</th>
+                            <th style="width:18%;">Nominal Masuk</th>
+                            <th style="width:14%;">Ket</th>
+                            <th style="width:14%;">Tanggal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+                <div class="footer-note">
+                    Laporan ini dihasilkan secara otomatis oleh sistem.
+                </div>
+            </div>
+            `;
+
+            const container = document.getElementById('pdf-export-container');
+            container.style.display = 'block';
+            container.innerHTML = pdfHtml;
+
+            html2pdf()
+                .set({
+                    margin: 0.4,
+                    filename: `Laporan_Keuangan_Pasundan3_${now.toISOString().slice(0,10)}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+                })
+                .from(container)
+                .save()
+                .then(() => {
+                    container.style.display = 'none';
+                    toast('PDF berhasil diunduh', 'success');
+                })
+                .catch(err => {
+                    container.style.display = 'none';
+                    toast('Gagal generate PDF: ' + err.message, 'error');
+                });
+        }
+
+        function exportGS() {
+            const url = `https://docs.google.com/spreadsheets/d/1SIMULASI_${Date.now()}`;
+            navigator.clipboard.writeText(url).then(() => {
+                toast('Link Google Sheet (simulasi) disalin ke clipboard', 'success');
+            }).catch(() => {
+                toast('Link: ' + url, 'info');
+            });
+        }
+
+        // ================================================================
+        //  LAPORAN PERIODE
+        // ================================================================
+        function toggleCustomRange() {
+            const val = document.getElementById('periodeSelect').value;
+            const custom = document.getElementById('customRange');
+            if (val === 'custom') {
+                custom.classList.add('show');
+                const now = new Date();
+                const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                document.getElementById('tglAwal').value = firstDay.toISOString().slice(0, 10);
+                document.getElementById('tglAkhir').value = lastDay.toISOString().slice(0, 10);
+            } else {
+                custom.classList.remove('show');
+            }
+            renderLaporan();
+        }
+
+        function renderLaporan() {
+            const periode = document.getElementById('periodeSelect').value;
+            const container = document.getElementById('laporanContainer');
+            const exportBtns = document.getElementById('laporanExportBtns');
+            let tglAwal, tglAkhir;
+            const now = new Date();
+
+            if (periode === 'minggu') {
+                const hari = now.getDay();
+                const selisih = hari === 0 ? 6 : hari - 1;
+                const senin = new Date(now);
+                senin.setDate(now.getDate() - selisih);
+                tglAwal = senin.toISOString().slice(0, 10);
+                const minggu = new Date(senin);
+                minggu.setDate(senin.getDate() + 6);
+                tglAkhir = minggu.toISOString().slice(0, 10);
+            } else if (periode === 'bulan') {
+                tglAwal = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+                tglAkhir = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+            } else {
+                tglAwal = document.getElementById('tglAwal').value;
+                tglAkhir = document.getElementById('tglAkhir').value;
+                if (!tglAwal || !tglAkhir) {
+                    container.innerHTML = '<p class="text-muted">Silakan pilih tanggal awal dan akhir.</p>';
+                    exportBtns.classList.remove('show');
+                    return;
                 }
             }
-        });
 
-        // Chart Payment Status
-        const paid = dataSiswa.filter(s => s.nominal > 0).length;
-        const unpaid = dataSiswa.filter(s => s.nominal === 0).length;
+            // Filter transaksi
+            const masuk = siswaData.filter(s => s.tanggal && s.tanggal >= tglAwal && s.tanggal <= tglAkhir);
+            const keluar = pengeluaranData.filter(p => p.tanggal >= tglAwal && p.tanggal <= tglAkhir);
 
-        const ctx2 = document.getElementById('chartPayment').getContext('2d');
-        if (chartPayment) chartPayment.destroy();
-        chartPayment = new Chart(ctx2, {
-            type: 'doughnut',
-            data: {
-                labels: ['Sudah Bayar', 'Belum Bayar'],
-                datasets: [{
-                    data: [paid, unpaid],
-                    backgroundColor: ['#28a745', '#dc3545'],
-                    borderWidth: 0,
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'bottom', labels: { font: { size: 11 } } }
-                },
-                cutout: '70%',
+            const totalMasuk = masuk.reduce((sum, s) => sum + (s.nominal || 0), 0);
+            const totalKeluar = keluar.reduce((sum, p) => sum + (p.nominal || 0), 0);
+
+            const semuaMasuk = siswaData.filter(s => s.tanggal && s.tanggal < tglAwal);
+            const semuaKeluar = pengeluaranData.filter(p => p.tanggal < tglAwal);
+            const saldoAwal = semuaMasuk.reduce((sum, s) => sum + (s.nominal || 0), 0) -
+                semuaKeluar.reduce((sum, p) => sum + (p.nominal || 0), 0);
+            const saldoAkhir = saldoAwal + totalMasuk - totalKeluar;
+
+            container.innerHTML = `
+                <div style="background:#f8fafc; border-radius:10px; padding:16px; overflow-x:auto;">
+                    <table style="width:100%; min-width:400px; font-size:0.9rem;">
+                        <thead>
+                            <tr><th style="background:#e5e9f0; padding:8px; text-align:left;">Keterangan</th>
+                                <th style="background:#e5e9f0; padding:8px; text-align:right;">Nominal</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Saldo Awal (sebelum ${tglAwal})</td><td style="text-align:right;">Rp ${formatNumber(saldoAwal)}</td></tr>
+                            <tr><td>Total Kas Masuk (${masuk.length} transaksi)</td><td style="text-align:right;">Rp ${formatNumber(totalMasuk)}</td></tr>
+                            <tr><td>Total Kas Keluar (${keluar.length} transaksi)</td><td style="text-align:right;">Rp ${formatNumber(totalKeluar)}</td></tr>
+                            <tr style="border-top:2px solid #0f1a2f; font-weight:700;">
+                                <td>Saldo Akhir per ${tglAkhir}</td>
+                                <td style="text-align:right;">Rp ${formatNumber(saldoAkhir)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top:8px; font-size:0.75rem; color:var(--text-muted);">
+                        <i class="fas fa-calendar-alt"></i> Periode: ${tglAwal} s/d ${tglAkhir}
+                    </div>
+                </div>
+            `;
+            exportBtns.classList.add('show');
+        }
+
+        // ================================================================
+        //  EXPORT LAPORAN PERIODE
+        // ================================================================
+        function exportLaporanExcel() {
+            const tglAwal = document.getElementById('tglAwal').value;
+            const tglAkhir = document.getElementById('tglAkhir').value;
+            if (!tglAwal || !tglAkhir) {
+                toast('Pilih periode terlebih dahulu', 'warning');
+                return;
             }
-        });
-    }
 
-    // ============================================================
-    // 10. QR SCANNER
-    // ============================================================
-    function openScanner() {
-        const modal = document.getElementById('scannerModal');
-        modal.classList.add('active');
-        // Inisialisasi scanner
-        if (!qrScannerInstance) {
-            qrScannerInstance = new Html5Qrcode("qr-reader");
-        }
-        qrScannerInstance.start({ facingMode: "environment" }, {
-            fps: 10,
-            qrbox: { width: 250, height: 250 }
-        }, onScanSuccess, onScanError);
-    }
+            const masuk = siswaData.filter(s => s.tanggal && s.tanggal >= tglAwal && s.tanggal <= tglAkhir);
+            const keluar = pengeluaranData.filter(p => p.tanggal >= tglAwal && p.tanggal <= tglAkhir);
+            const semuaMasuk = siswaData.filter(s => s.tanggal && s.tanggal < tglAwal);
+            const semuaKeluar = pengeluaranData.filter(p => p.tanggal < tglAwal);
 
-    function closeScanner() {
-        const modal = document.getElementById('scannerModal');
-        modal.classList.remove('active');
-        if (qrScannerInstance) {
-            qrScannerInstance.stop().catch(() => {});
-        }
-    }
+            const totalMasuk = masuk.reduce((sum, s) => sum + (s.nominal || 0), 0);
+            const totalKeluar = keluar.reduce((sum, p) => sum + (p.nominal || 0), 0);
+            const saldoAwal = semuaMasuk.reduce((sum, s) => sum + (s.nominal || 0), 0) -
+                semuaKeluar.reduce((sum, p) => sum + (p.nominal || 0), 0);
+            const saldoAkhir = saldoAwal + totalMasuk - totalKeluar;
 
-    function onScanSuccess(decodedText, decodedResult) {
-        // decodedText = NIS
-        closeScanner();
-        const siswa = dataSiswa.find(s => s.nis === decodedText);
-        if (siswa) {
-            document.getElementById('inputNIS').value = siswa.nis;
-            document.getElementById('inputNama').value = siswa.nama;
-            showToast(`Scan berhasil! Siswa: ${siswa.nama}`, 'success');
-            // Jika admin belum login, minta login dulu
-            if (!isAdmin) {
-                showToast('Silakan login sebagai admin untuk menambah setoran.', 'warning');
-                toggleLogin();
+            const wb = XLSX.utils.book_new();
+
+            const summaryData = [
+                ['LAPORAN KAS PERIODE'],
+                ['Periode', tglAwal, 's/d', tglAkhir],
+                [],
+                ['Keterangan', 'Nominal'],
+                ['Saldo Awal', saldoAwal],
+                ['Total Kas Masuk', totalMasuk],
+                ['Total Kas Keluar', totalKeluar],
+                ['Saldo Akhir', saldoAkhir]
+            ];
+            const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, ws1, 'Ringkasan');
+
+            if (masuk.length > 0) {
+                const detailMasuk = masuk.map(s => ({
+                    'NIS': s.nis,
+                    'Nama': s.nama,
+                    'Nominal': s.nominal,
+                    'Tanggal': s.tanggal,
+                    'Keterangan': s.ket || '-'
+                }));
+                const ws2 = XLSX.utils.json_to_sheet(detailMasuk);
+                XLSX.utils.book_append_sheet(wb, ws2, 'Detail Masuk');
+            } else {
+                const ws2 = XLSX.utils.aoa_to_sheet([['Tidak ada transaksi masuk pada periode ini']]);
+                XLSX.utils.book_append_sheet(wb, ws2, 'Detail Masuk');
             }
-        } else {
-            showToast(`NIS ${decodedText} tidak ditemukan!`, 'error');
-        }
-    }
 
-    function onScanError(err) {
-        // ignore
-    }
+            if (keluar.length > 0) {
+                const detailKeluar = keluar.map(p => ({
+                    'Tanggal': p.tanggal,
+                    'Deskripsi': p.deskripsi,
+                    'Nominal': p.nominal
+                }));
+                const ws3 = XLSX.utils.json_to_sheet(detailKeluar);
+                XLSX.utils.book_append_sheet(wb, ws3, 'Detail Keluar');
+            } else {
+                const ws3 = XLSX.utils.aoa_to_sheet([['Tidak ada transaksi keluar pada periode ini']]);
+                XLSX.utils.book_append_sheet(wb, ws3, 'Detail Keluar');
+            }
 
-    // ============================================================
-    // 11. SCAN NIS MANUAL
-    // ============================================================
-    function scanNIS() {
-        const nis = document.getElementById('inputNIS').value.trim();
-        if (!nis) {
-            showToast('Masukkan NIS terlebih dahulu!', 'warning');
-            return;
-        }
-        const siswa = dataSiswa.find(s => s.nis === nis);
-        if (siswa) {
-            document.getElementById('inputNama').value = siswa.nama;
-            showToast(`Siswa ditemukan: ${siswa.nama}`, 'success');
-        } else {
-            showToast(`NIS ${nis} tidak ditemukan!`, 'error');
-            document.getElementById('inputNama').value = '';
-        }
-    }
-
-    // ============================================================
-    // 12. TAMBAH SETORAN (ADMIN)
-    // ============================================================
-    function tambahSetoran() {
-        if (!isAdmin) {
-            showToast('Harap login sebagai admin terlebih dahulu!', 'error');
-            return;
+            const fileName = `Laporan_Periode_${tglAwal}_sampai_${tglAkhir}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            toast('Laporan Excel berhasil diunduh', 'success');
         }
 
-        const nis = document.getElementById('inputNIS').value.trim();
-        const nominal = parseInt(document.getElementById('inputNominal').value);
-        const siswa = dataSiswa.find(s => s.nis === nis);
+        function exportLaporanPDF() {
+            const tglAwal = document.getElementById('tglAwal').value;
+            const tglAkhir = document.getElementById('tglAkhir').value;
+            if (!tglAwal || !tglAkhir) {
+                toast('Pilih periode terlebih dahulu', 'warning');
+                return;
+            }
 
-        if (!siswa) {
-            showToast('NIS tidak valid!', 'error');
-            return;
-        }
-        if (!nominal || nominal < 10000 || nominal % 10000 !== 0) {
-            showToast('Nominal harus kelipatan Rp10.000 dan minimal Rp10.000!', 'warning');
-            return;
-        }
+            const masuk = siswaData.filter(s => s.tanggal && s.tanggal >= tglAwal && s.tanggal <= tglAkhir);
+            const keluar = pengeluaranData.filter(p => p.tanggal >= tglAwal && p.tanggal <= tglAkhir);
+            const semuaMasuk = siswaData.filter(s => s.tanggal && s.tanggal < tglAwal);
+            const semuaKeluar = pengeluaranData.filter(p => p.tanggal < tglAwal);
 
-        // Update data
-        const now = new Date();
-        const tanggalStr = now.toISOString().split('T')[0];
-        const jamStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const totalMasuk = masuk.reduce((sum, s) => sum + (s.nominal || 0), 0);
+            const totalKeluar = keluar.reduce((sum, p) => sum + (p.nominal || 0), 0);
+            const saldoAwal = semuaMasuk.reduce((sum, s) => sum + (s.nominal || 0), 0) -
+                semuaKeluar.reduce((sum, p) => sum + (p.nominal || 0), 0);
+            const saldoAkhir = saldoAwal + totalMasuk - totalKeluar;
 
-        siswa.nominal += nominal;
-        siswa.tanggal = tanggalStr;
-        siswa.ket = (siswa.nominal / CONFIG.iuranPerBulan) + ' bulan';
-        siswa.status = 'paid';
+            const now = new Date();
+            const tanggalCetak = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
-        // Kirim ke Google Sheet
-        const payload = {
-            action: 'addSetoran',
-            nis: nis,
-            nominal: nominal,
-            tanggal: tanggalStr,
-            jam: jamStr
-        };
-
-        fetch(CONFIG.gasUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(() => {
-                showToast(`Setoran Rp${nominal.toLocaleString('id-ID')} untuk ${siswa.nama} berhasil!`, 'success');
-                renderAll();
-                // Reset form
-                document.getElementById('inputNominal').value = '';
-                document.getElementById('inputNIS').value = '';
-                document.getElementById('inputNama').value = '';
-            })
-            .catch(err => {
-                showToast('Gagal menyimpan ke GSheet, tetapi data lokal sudah diupdate.', 'warning');
-                renderAll();
+            let detailMasukRows = '';
+            masuk.forEach(s => {
+                detailMasukRows += `<tr>
+                    <td>${s.nis}</td>
+                    <td>${s.nama}</td>
+                    <td style="text-align:right;">Rp ${formatNumber(s.nominal)}</td>
+                    <td>${s.tanggal}</td>
+                </tr>`;
             });
-    }
+            if (!detailMasukRows) detailMasukRows = '<tr><td colspan="4" style="text-align:center;">Tidak ada transaksi masuk</td></tr>';
 
-    // ============================================================
-    // 13. TAMBAH KAS KELUAR (ADMIN)
-    // ============================================================
-    function tambahKasKeluar() {
-        if (!isAdmin) {
-            showToast('Harap login sebagai admin terlebih dahulu!', 'error');
-            return;
+            let detailKeluarRows = '';
+            keluar.forEach(p => {
+                detailKeluarRows += `<tr>
+                    <td>${p.deskripsi}</td>
+                    <td style="text-align:right;">Rp ${formatNumber(p.nominal)}</td>
+                    <td>${p.tanggal}</td>
+                </tr>`;
+            });
+            if (!detailKeluarRows) detailKeluarRows = '<tr><td colspan="3" style="text-align:center;">Tidak ada transaksi keluar</td></tr>';
+
+            const pdfHtml = `
+            <div class="pdf-report">
+                <div class="pdf-header">
+                    <h1>SMP Pasundan 3</h1>
+                    <h2>Laporan Kas Periode</h2>
+                    <div class="date">Periode: ${tglAwal} s/d ${tglAkhir} | Cetak: ${tanggalCetak}</div>
+                </div>
+                
+                <div style="margin-bottom:16px;">
+                    <table style="width:50%; margin:0 auto; border:1px solid #888;">
+                        <tr><td style="font-weight:700;">Saldo Awal</td><td style="text-align:right;">Rp ${formatNumber(saldoAwal)}</td></tr>
+                        <tr><td style="font-weight:700;">Total Kas Masuk</td><td style="text-align:right;">Rp ${formatNumber(totalMasuk)}</td></tr>
+                        <tr><td style="font-weight:700;">Total Kas Keluar</td><td style="text-align:right;">Rp ${formatNumber(totalKeluar)}</td></tr>
+                        <tr style="border-top:2px solid #000; font-weight:700;"><td>Saldo Akhir</td><td style="text-align:right;">Rp ${formatNumber(saldoAkhir)}</td></tr>
+                    </table>
+                </div>
+
+                <h3 style="text-align:center; margin-top:20px;">Detail Kas Masuk</h3>
+                <table>
+                    <thead><tr><th>NIS</th><th>Nama</th><th>Nominal</th><th>Tanggal</th></tr></thead>
+                    <tbody>${detailMasukRows}</tbody>
+                </table>
+
+                <h3 style="text-align:center; margin-top:20px;">Detail Kas Keluar</h3>
+                <table>
+                    <thead><tr><th>Deskripsi</th><th>Nominal</th><th>Tanggal</th></tr></thead>
+                    <tbody>${detailKeluarRows}</tbody>
+                </table>
+
+                <div class="footer-note">
+                    Laporan ini dihasilkan secara otomatis oleh sistem.
+                </div>
+            </div>
+            `;
+
+            const container = document.getElementById('pdf-export-container');
+            container.style.display = 'block';
+            container.innerHTML = pdfHtml;
+
+            html2pdf()
+                .set({
+                    margin: 0.4,
+                    filename: `Laporan_Kas_Periode_${tglAwal}_sampai_${tglAkhir}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+                })
+                .from(container)
+                .save()
+                .then(() => {
+                    container.style.display = 'none';
+                    toast('Laporan PDF berhasil diunduh', 'success');
+                })
+                .catch(err => {
+                    container.style.display = 'none';
+                    toast('Gagal generate PDF: ' + err.message, 'error');
+                });
         }
 
-        const keterangan = document.getElementById('inputKeteranganKeluar').value.trim();
-        const jumlah = parseInt(document.getElementById('inputJumlahKeluar').value);
+        // ================================================================
+        //  GAS SYNC
+        // ================================================================
+        const GAS_URL =
+            'https://script.google.com/macros/s/AKfycbylkBNay187mpBRdh714BP2wXwoI6zAbbDV-Qie8ruxOWxys9vrhLEOgS3uEI7mjsGA/exec';
+        const GAS_TOKEN = 'SMP_TABUNGAN_2026';
 
-        if (!keterangan) {
-            showToast('Masukkan keterangan pengeluaran!', 'warning');
-            return;
+        function setGasUrl() {
+            const url = document.getElementById('gasUrlInput').value.trim();
+            if (!url) { toast('Masukkan URL GAS', 'warning'); return; }
+            localStorage.setItem(GAS_URL_KEY, url);
+            document.getElementById('gasStatus').textContent = '✅ URL tersimpan: ' + url;
+            toast('URL GAS berhasil disimpan', 'success');
         }
-        if (!jumlah || jumlah < 1) {
-            showToast('Masukkan jumlah pengeluaran yang valid!', 'warning');
-            return;
+
+        async function syncData() {
+            const btn = document.querySelector('.btn-sync');
+            const gasUrl = localStorage.getItem(GAS_URL_KEY) || GAS_URL;
+            if (btn) btn.classList.add('loading');
+            toast('🔄 Sinkronisasi data...', 'info');
+
+            try {
+                const url = new URL(gasUrl);
+                url.searchParams.set('action', 'read');
+                url.searchParams.set('token', GAS_TOKEN);
+
+                const response = await fetch(url.toString());
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const result = await response.json();
+                if (!result.success) throw new Error(result.error || 'Gagal sync');
+
+                const remoteSiswa = result.data.siswa || [];
+                const remoteKeluar = result.data.keluar || [];
+
+                // OVERWRITE siswa
+                const newData = remoteSiswa.map(rs => {
+                    const tglFormatted = rs.tglTerakhir ? rs.tglTerakhir.split('T')[0] : '';
+                    return {
+                        nis: rs.nis || '',
+                        nama: rs.nama || '',
+                        gender: rs.gender || '',
+                        nominal: Number(rs.nominal) || 0,
+                        tanggal: tglFormatted,
+                        ket: rs.ket || (Number(rs.nominal) > 0 ? Math.floor(Number(rs.nominal) / 10000) +
+                            ' bln' : ''),
+                        status: rs.status || (Number(rs.nominal) > 0 ? 'Sudah Bayar' : 'Belum Bayar')
+                    };
+                });
+                siswaData = newData;
+
+                // Simpan pengeluaran dari GAS
+                remoteKeluar.forEach(rk => {
+                    const tgl = rk.waktu ? new Date(rk.waktu).toISOString().slice(0, 10) : new Date().toISOString()
+                        .slice(0, 10);
+                    pengeluaranData.push({
+                        tanggal: tgl,
+                        deskripsi: rk.keperluan || 'Pengeluaran',
+                        nominal: Number(rk.nominal) || 0
+                    });
+                });
+                savePengeluaran();
+
+                let totalKeluar = 0;
+                remoteKeluar.forEach(rk => { totalKeluar += Number(rk.nominal) || 0; });
+                if (remoteKeluar.length > 0) {
+                    kasKeluarTotal = totalKeluar;
+                    saveKas();
+                }
+
+                saveData();
+                renderTable();
+                catatLog('Sync GAS', `${remoteSiswa.length} siswa (overwrite), ${remoteKeluar.length} pengeluaran`);
+                toast(`✅ Sync berhasil! ${remoteSiswa.length} siswa diupdate.`, 'success');
+
+            } catch (error) {
+                console.error('❌ Sync error:', error);
+                toast('❌ Gagal sync: ' + error.message, 'error');
+            } finally {
+                if (btn) btn.classList.remove('loading');
+            }
         }
 
-        const now = new Date();
-        const tanggalStr = now.toISOString().split('T')[0];
-        const jamStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        function autoSync() {
+            setInterval(() => {
+                if (isAdmin) {
+                    console.log('🔄 Auto-sync running...');
+                    syncData();
+                }
+            }, 1800000);
+        }
 
-        dataKasKeluar.push({
-            tanggal: tanggalStr,
-            jam: jamStr,
-            keterangan: keterangan,
-            jumlah: jumlah
+        // ================================================================
+        //  UPLOAD EXCEL
+        // ================================================================
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            if (!isAdmin) { toast('Login dulu untuk import', 'warning'); return; }
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                try {
+                    const data = new Uint8Array(ev.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet);
+                    if (!json || json.length === 0) { toast('File kosong atau format salah', 'error'); return; }
+                    const newData = json.map(row => {
+                        const nis = String(row['NIS'] || row['nis'] || row['No'] || '').trim();
+                        const nama = String(row['Nama'] || row['nama'] || row['Nama Siswa'] || '').trim();
+                        const gender = String(row['Gender'] || row['gender'] || row['L/P'] || 'L').trim()
+                            .toUpperCase();
+                        const nominal = parseFloat(row['Nominal'] || row['nominal'] || row['Nominal Masuk'] ||
+                            0) || 0;
+                        const tanggal = String(row['Tanggal'] || row['tanggal'] || '').trim();
+                        const ket = String(row['Ket'] || row['ket'] || row['Ket (Bulan)'] || '').trim();
+                        const status = String(row['Status'] || row['status'] || (nominal > 0 ? 'Sudah Bayar' :
+                            'Belum Bayar')).trim();
+                        return { nis, nama, gender, nominal, tanggal, ket, status };
+                    }).filter(s => s.nis && s.nama);
+                    if (newData.length === 0) { toast('Tidak ada data valid', 'error'); return; }
+                    siswaData = newData;
+                    normalizeData();
+                    saveData();
+                    renderTable();
+                    catatLog('Import Excel', `${newData.length} data diimport`);
+                    toast(`Berhasil import ${newData.length} data dari Excel`, 'success');
+                    document.getElementById('uploadStatus').textContent = `✅ ${newData.length} data diimport`;
+                } catch (err) {
+                    toast('Gagal membaca file: ' + err.message, 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            this.value = '';
         });
 
-        // Kirim ke GSheet
-        const payload = {
-            action: 'addKasKeluar',
-            keterangan: keterangan,
-            jumlah: jumlah,
-            tanggal: tanggalStr,
-            jam: jamStr
-        };
+        // ================================================================
+        //  QR SCANNER
+        // ================================================================
+        document.getElementById('scanQrBtn').addEventListener('click', function() {
+            if (!isAdmin) { toast('Login dulu', 'warning'); return; }
+            const container = document.getElementById('scannerContainer');
+            if (container.style.display === 'block') {
+                stopScanner();
+                return;
+            }
+            container.style.display = 'block';
+            startScanner();
+        });
 
-        fetch(CONFIG.gasUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(() => {
-                showToast(`Pengeluaran "${keterangan}" sebesar Rp${jumlah.toLocaleString('id-ID')} berhasil dicatat.`,
-                'success');
-                renderAll();
-                document.getElementById('inputKeteranganKeluar').value = '';
-                document.getElementById('inputJumlahKeluar').value = '';
-            })
-            .catch(err => {
-                showToast('Gagal menyimpan ke GSheet, data lokal sudah diupdate.', 'warning');
-                renderAll();
-            });
-    }
-
-    // ============================================================
-    // 14. EDIT SISWA (ADMIN)
-    // ============================================================
-    function editSiswa(id) {
-        if (!isAdmin) {
-            showToast('Harap login sebagai admin!', 'error');
-            return;
+        function startScanner() {
+            if (qrScannerInstance) {
+                qrScannerInstance.clear();
+                qrScannerInstance = null;
+            }
+            const readerEl = document.getElementById('qr-reader');
+            readerEl.innerHTML = '';
+            try {
+                qrScannerInstance = new Html5Qrcode("qr-reader");
+                const config = { fps: 15, qrbox: { width: 240, height: 240 }, aspectRatio: 1.0 };
+                qrScannerInstance.start({ facingMode: "environment" },
+                    config,
+                    onScanSuccess,
+                    onScanError
+                );
+                scannerActive = true;
+                document.getElementById('scanResult').textContent = '📷 Menunggu scan QR...';
+            } catch (err) {
+                toast('Gagal inisialisasi kamera: ' + err.message, 'error');
+                document.getElementById('scannerContainer').style.display = 'none';
+            }
         }
-        const siswa = dataSiswa.find(s => s.id === id);
-        if (!siswa) return;
 
-        const namaBaru = prompt('Edit Nama:', siswa.nama);
-        if (namaBaru && namaBaru.trim()) {
-            siswa.nama = namaBaru.trim();
-            renderAll();
-            showToast('Data berhasil diupdate!', 'success');
-            // Kirim ke GSheet
-            fetch(CONFIG.gasUrl, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'editSiswa', nis: siswa.nis, nama: siswa.nama })
-                })
-                .catch(() => showToast('Gagal sync ke GSheet, data lokal sudah update.', 'warning'));
+        function onScanSuccess(decodedText, decodedResult) {
+            const nis = decodedText.trim();
+            document.getElementById('scanResult').textContent = `✅ Scan berhasil: NIS ${nis}`;
+            document.getElementById('editNis').value = nis;
+            const found = siswaData.find(s => s.nis === nis);
+            if (found) {
+                document.getElementById('editNama').value = found.nama;
+                document.getElementById('editGender').value = found.gender;
+                document.getElementById('editNominal').value = found.nominal || 0;
+                document.getElementById('editTanggal').value = found.tanggal || '';
+                document.getElementById('editStatus').value = found.status || 'Belum Bayar';
+                toast('Data siswa ditemukan: ' + found.nama, 'success');
+            } else {
+                toast('NIS tidak ditemukan di database', 'warning');
+            }
+            stopScanner();
         }
-    }
 
-    // ============================================================
-    // 15. HAPUS SISWA (ADMIN)
-    // ============================================================
-    function hapusSiswa(id) {
-        if (!isAdmin) {
-            showToast('Harap login sebagai admin!', 'error');
-            return;
+        function onScanError(err) {}
+
+        function stopScanner() {
+            scannerActive = false;
+            if (qrScannerInstance) {
+                try {
+                    qrScannerInstance.stop().then(() => {
+                        qrScannerInstance.clear();
+                        qrScannerInstance = null;
+                    }).catch(() => {});
+                } catch (e) {}
+            }
+            document.getElementById('scannerContainer').style.display = 'none';
+            document.getElementById('scanResult').textContent = 'Arahkan QR ke kamera';
+            const readerEl = document.getElementById('qr-reader');
+            readerEl.innerHTML = '';
         }
-        const siswa = dataSiswa.find(s => s.id === id);
-        if (!siswa) return;
 
-        if (confirm(`Yakin ingin menghapus siswa ${siswa.nama} (${siswa.nis})?`)) {
-            dataSiswa = dataSiswa.filter(s => s.id !== id);
-            renderAll();
-            showToast(`Siswa ${siswa.nama} berhasil dihapus.`, 'success');
-            fetch(CONFIG.gasUrl, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'hapusSiswa', nis: siswa.nis })
-                })
-                .catch(() => showToast('Gagal sync ke GSheet, data lokal sudah dihapus.', 'warning'));
+        // ================================================================
+        //  LOGIN / LOGOUT
+        // ================================================================
+        function checkLogin() {
+            const stored = localStorage.getItem('isAdmin');
+            if (stored === 'true') {
+                isAdmin = true;
+                document.getElementById('loginOverlay').classList.remove('show');
+                document.getElementById('loginToggleBtn').classList.add('hidden');
+                document.getElementById('logoutBtn').classList.remove('hidden');
+                document.getElementById('adminPanel').classList.add('visible');
+            } else {
+                isAdmin = false;
+                document.getElementById('loginOverlay').classList.remove('show');
+                document.getElementById('loginToggleBtn').classList.remove('hidden');
+                document.getElementById('logoutBtn').classList.add('hidden');
+                document.getElementById('adminPanel').classList.remove('visible');
+                stopScanner();
+            }
+            renderTable();
         }
-    }
 
-    // ============================================================
-    // 16. RESET DATA (ADMIN)
-    // ============================================================
-    function resetData() {
-        if (!isAdmin) {
-            showToast('Harap login sebagai admin!', 'error');
-            return;
-        }
-        if (confirm('⚠️ RESET DATA: Semua data akan dikembalikan ke awal (hanya data dummy). Lanjutkan?')) {
-            loadDummyData();
-            showToast('Data berhasil di-reset ke data awal.', 'info');
-        }
-    }
-
-    // ============================================================
-    // 17. EXPORT EXCEL
-    // ============================================================
-    function exportExcel() {
-        const data = dataSiswa.map(s => ({
-            'No': s.no,
-            'NIS': s.nis,
-            'Nama': s.nama,
-            'Gender': s.gender,
-            'Nominal': s.nominal,
-            'Tanggal': s.tanggal,
-            'Ket (Bulan)': s.ket,
-            'Status': s.nominal > 0 ? 'Sudah Bayar' : 'Belum Bayar'
-        }));
-
-        // Tambahkan summary
-        const totalNominal = dataSiswa.reduce((sum, s) => sum + s.nominal, 0);
-        const totalKeluar = dataKasKeluar.reduce((sum, k) => sum + (k.jumlah || 0), 0);
-        data.push({});
-        data.push({ 'No': 'TOTAL', 'Nominal': totalNominal, 'Status': `Total Siswa: ${dataSiswa.length}` });
-        data.push({ 'No': 'KAS KELUAR', 'Nominal': totalKeluar, 'Status': `Saldo: ${totalNominal - totalKeluar}` });
-
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(data);
-        XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
-        XLSX.writeFile(wb, `Laporan_Keuangan_${new Date().toISOString().split('T')[0]}.xlsx`);
-        showToast('Excel berhasil diekspor!', 'success');
-    }
-
-    // ============================================================
-    // 18. EXPORT PDF
-    // ============================================================
-    function exportPDF() {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('landscape', 'pt', 'a4');
-
-        // Title
-        doc.setFontSize(18);
-        doc.text('Laporan Keuangan Sekolah Pasundan 3', 40, 40);
-        doc.setFontSize(10);
-        doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 40, 60);
-
-        // Table headers
-        const headers = ['No', 'NIS', 'Nama', 'Gender', 'Nominal', 'Tanggal', 'Ket'];
-        const rows = dataSiswa.map(s => [
-            s.no, s.nis, s.nama, s.gender,
-            s.nominal > 0 ? 'Rp' + s.nominal.toLocaleString('id-ID') : '-',
-            s.tanggal || '-',
-            s.ket || 'Belum bayar'
-        ]);
-
-        doc.autoTable({
-            head: [headers],
-            body: rows,
-            startY: 70,
-            theme: 'grid',
-            styles: { fontSize: 8 },
-            headStyles: { fillColor: [26, 58, 92] },
-            didDrawPage: function(data) {
-                doc.setFontSize(8);
-                doc.text('Generated by Dashboard Keuangan Pasundan 3', 40, doc.internal.pageSize.height - 20);
+        document.getElementById('loginBtn').addEventListener('click', function() {
+            const user = document.getElementById('loginUser').value.trim();
+            const pass = document.getElementById('loginPass').value.trim();
+            if (user === 'admin' && pass === 'admin123') {
+                localStorage.setItem('isAdmin', 'true');
+                isAdmin = true;
+                document.getElementById('loginOverlay').classList.remove('show');
+                document.getElementById('loginToggleBtn').classList.add('hidden');
+                document.getElementById('logoutBtn').classList.remove('hidden');
+                document.getElementById('adminPanel').classList.add('visible');
+                document.getElementById('loginError').textContent = '';
+                toast('Login berhasil', 'success');
+                renderTable();
+                setTimeout(autoSync, 5000);
+            } else {
+                document.getElementById('loginError').textContent = '❌ Username atau password salah';
             }
         });
 
-        doc.save(`Laporan_Keuangan_${new Date().toISOString().split('T')[0]}.pdf`);
-        showToast('PDF berhasil diekspor!', 'success');
-    }
-
-    // ============================================================
-    // 19. OPEN GSHEET
-    // ============================================================
-    function openGSheet() {
-        window.open(CONFIG.sheetUrl, '_blank');
-        showToast('Membuka Google Sheet...', 'info');
-    }
-
-    // ============================================================
-    // 20. REFRESH DATA
-    // ============================================================
-    function refreshData() {
-        document.getElementById('btnRefresh').innerHTML = '<span class="spinner"></span>';
-        loadData().finally(() => {
-            document.getElementById('btnRefresh').innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+        document.getElementById('loginToggleBtn').addEventListener('click', function() {
+            document.getElementById('loginOverlay').classList.add('show');
         });
-    }
 
-    // ============================================================
-    // 21. INIT
-    // ============================================================
-    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('logoutBtn').addEventListener('click', function() {
+            localStorage.removeItem('isAdmin');
+            isAdmin = false;
+            document.getElementById('loginOverlay').classList.remove('show');
+            document.getElementById('loginToggleBtn').classList.remove('hidden');
+            document.getElementById('logoutBtn').classList.add('hidden');
+            document.getElementById('adminPanel').classList.remove('visible');
+            stopScanner();
+            toast('Logout berhasil', 'info');
+            renderTable();
+        });
+
+        document.getElementById('loginPass').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') document.getElementById('loginBtn').click();
+        });
+        document.getElementById('loginUser').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') document.getElementById('loginBtn').click();
+        });
+
+        // ================================================================
+        //  TOAST
+        // ================================================================
+        function toast(msg, type = 'success') {
+            const el = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMsg');
+            const icon = el.querySelector('i');
+            const icons = {
+                success: 'fa-check-circle',
+                warning: 'fa-exclamation-triangle',
+                error: 'fa-times-circle',
+                info: 'fa-info-circle'
+            };
+            icon.className = 'fas ' + (icons[type] || icons.success);
+            msgEl.textContent = msg;
+            el.classList.add('show');
+            clearTimeout(el._timeout);
+            el._timeout = setTimeout(() => el.classList.remove('show'), 3500);
+        }
+
+        // ================================================================
+        //  HEADER DATE
+        // ================================================================
+        document.getElementById('headerDate').textContent = new Date().toLocaleDateString('id-ID', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+
+        // ================================================================
+        //  INIT
+        // ================================================================
         loadData();
+        loadLog();
+        loadPengeluaran();
+        renderTable();
+        checkLogin();
 
-        // Auto-login dengan session (bisa disimpan di localStorage)
-        // Untuk keamanan, kita tidak auto-login.
-        // Admin harus login manual setiap kali.
-    });
+        // Load saved GAS URL
+        const savedUrl = localStorage.getItem(GAS_URL_KEY);
+        if (savedUrl) {
+            document.getElementById('gasUrlInput').value = savedUrl;
+            document.getElementById('gasStatus').textContent = '✅ URL tersimpan: ' + savedUrl;
+        }
 
-    // ============================================================
-    // 22. FIX: jsPDF autoTable tidak di-load? kita tambahkan fallback
-    // ============================================================
-    // Pastikan autoTable tersedia untuk PDF
-    if (typeof window.jspdf !== 'undefined') {
-        // autoTable akan di-load dari CDN jika diperlukan
-    }
-
-    console.log('🚀 Dashboard Keuangan Pasundan 3 siap!');
-    console.log('📊 Total siswa:', dataSiswa.length);
-    console.log('🔐 Admin login: bendahara / Anna@923016');
+        console.log('✅ Dashboard Keuangan Sekolah siap!');
+        console.log('🔐 Default login: admin / admin123');
+        console.log('📊 Data tersimpan di local storage (overwrite saat sync)');
+        console.log('📱 Scan QR untuk input NIS di panel admin');
+        console.log('📄 PDF format laporan resmi SMP Pasundan 3');
+        console.log('🔄 Auto-sync GAS setiap 30 menit (jika admin login)');
+        console.log('🛒 Iklan Shopee & TikTok siap di footer');
