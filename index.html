@@ -2914,15 +2914,39 @@ function simpanPengeluaranKas() {
   const deskripsiRingkasan = listKasKeluar.map(i => `${i.deskripsi} (${i.qty}x)`).join(", ");
 
   const payloadData = {
-    token: TOKEN, // Menggunakan TOKEN dari GAS
+    token: TOKEN,
     action: "addPengeluaran",
     payload: {
       keperluan: deskripsiRingkasan,
       nominal: totalPengeluaran,
-      detail: listKasKeluar // Disimpan sebagai JSON di kolom ke-4 Google Sheet
+      detail: listKasKeluar
     }
   };
 
+  fetch(URL_GAS, {
+    method: "POST",
+    body: JSON.stringify(payloadData)
+  })
+  .then(res => res.json())
+  .then(res => {
+    if (res.success) {
+      alert("Laporan Kas Keluar berhasil disimpan!");
+      
+      // Reset tabel lokal
+      listKasKeluar = [];
+      renderTabel();
+
+      // PANGGUL ULANG DATA DASHBOARD SUPAYA CARD ATAS TERUPDATE
+      if (typeof loadDataFromGAS === "function") {
+        loadDataFromGAS(); // Sesuaikan dengan nama fungsi load/read data di script utama Mas Bro
+      } else {
+        location.reload(); // Opsi fallback: reload halaman jika tidak ada fungsi reload khusus
+      }
+    } else {
+      alert("Gagal menyimpan: " + res.error);
+    }
+  });
+}
   // Contoh request menggunakan Fetch API ke Web App URL GAS Mas Bro
   fetch("URL_WEB_APP_GAS_MAS_BRO", {
     method: "POST",
@@ -2945,6 +2969,21 @@ function simpanPengeluaranKas() {
     alert("Terjadi kesalahan koneksi!");
   });
 }
+
+       function updateDashboardUI(data) {
+  // Update Card Statistik Utama
+  document.getElementById("cardPemasukan").innerText = formatRupiah(data.totalMasuk);
+  document.getElementById("cardPengeluaran").innerText = formatRupiah(data.totalKeluar);
+  document.getElementById("cardSaldo").innerText = formatRupiah(data.saldo);
+  
+  // Update teks keterangan di bawah Saldo
+  document.getElementById("subtextSaldo").innerText = 
+    `Kas masuk ${formatRupiah(data.totalMasuk)} - keluar ${formatRupiah(data.totalKeluar)}`;
+    
+  // Perbarui saldo awal di form Kas Keluar
+  globalSaldoAwal = data.saldo;
+  document.getElementById("txtSaldoAwal").innerText = formatRupiah(data.saldo);
+} 
     </script>
 
 </body>
