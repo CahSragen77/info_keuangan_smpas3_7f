@@ -2789,201 +2789,143 @@
 
         // Variable Global
 let globalSaldoAwal = 0; // Akan diisi dari data doGet (data.saldo)
+// ================================================================
+//  MODUL LAPORAN KAS KELUAR (RINCIAN TRANSANKS)
+// ================================================================
 let listKasKeluar = [];
-
-// Format Angka ke Rupiah
-function formatRupiah(angka) {
-  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(angka);
-}
-
-// Inisialisasi Data Tampilan dari backend GAS
-function initHalamanKasKeluar(dataFromGAS) {
-  // Ambil saldo aktual dari respon `doGet`
-  globalSaldoAwal = dataFromGAS.saldo || 0;
-  
-  document.getElementById('tglHariIni').innerText = new Date().toLocaleDateString('id-ID', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  });
-
-  updateKalkulasiSaldo();
-}
 
 // Hitung Subtotal saat Qty atau Harga diubah
 function hitungSubtotal() {
-  const qty = parseFloat(document.getElementById("inputQty").value) || 0;
-  const harga = parseFloat(document.getElementById("inputHarga").value) || 0;
-  const subtotal = qty * harga;
-  document.getElementById("inputSubtotal").value = formatRupiah(subtotal);
+    const qty = parseFloat(document.getElementById("inputQty").value) || 0;
+    const harga = parseFloat(document.getElementById("inputHarga").value) || 0;
+    const subtotal = qty * harga;
+    document.getElementById("inputSubtotal").value = 'Rp' + formatNumber(subtotal);
 }
 
-// Tambahkan Baris Transaksi ke Tabel
+// Tambahkan Baris Transaksi ke Tabel Kas Keluar
 function tambahBarisTabel() {
-  const deskripsi = document.getElementById("inputDeskripsi").value.trim();
-  const qty = parseInt(document.getElementById("inputQty").value) || 0;
-  const harga = parseFloat(document.getElementById("inputHarga").value) || 0;
-  const subtotal = qty * harga;
+    const deskripsi = document.getElementById("inputDeskripsi").value.trim();
+    const qty = parseInt(document.getElementById("inputQty").value) || 0;
+    const harga = parseFloat(document.getElementById("inputHarga").value) || 0;
+    const subtotal = qty * harga;
 
-  if (!deskripsi || qty <= 0 || harga <= 0) {
-    alert("Mohon isi deskripsi, qty, dan harga satuan dengan benar.");
-    return;
-  }
+    if (!deskripsi || qty <= 0 || harga <= 0) {
+        toast("Mohon isi deskripsi, qty, dan harga dengan benar", "warning");
+        return;
+    }
 
-  const tglTransaksi = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    const tglTransaksi = new Date().toISOString().split('T')[0];
 
-  // Masukkan ke array
-  const item = {
-    tanggal: tglTransaksi,
-    deskripsi: deskripsi,
-    qty: qty,
-    harga: harga,
-    jumlah: subtotal
-  };
-  listKasKeluar.push(item);
-
-  // Reset Input Form
-  document.getElementById("inputDeskripsi").value = "";
-  document.getElementById("inputQty").value = "1";
-  document.getElementById("inputHarga").value = "";
-  document.getElementById("inputSubtotal").value = "";
-
-  renderTabel();
-}
-
-// Hapus Item Baris
-function hapusBaris(index) {
-  listKasKeluar.splice(index, 1);
-  renderTabel();
-}
-
-// Render Ulang Tabel & Hitung Saldo Real-time
-function renderTabel() {
-  const tbody = document.getElementById("tbodyKasKeluar");
-  tbody.innerHTML = "";
-
-  if (listKasKeluar.length === 0) {
-    tbody.innerHTML = `<tr id="emptyRow"><td colspan="6" class="text-muted">Belum ada item transaksi yang ditambahkan.</td></tr>`;
-  } else {
-    listKasKeluar.forEach((item, idx) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${idx + 1}</td>
-        <td>${item.tanggal}</td>
-        <td class="text-start">${item.deskripsi}</td>
-        <td>${item.qty}</td>
-        <td>${formatRupiah(item.jumlah)}</td>
-        <td>
-          <button class="btn btn-sm btn-outline-danger" onclick="hapusBaris(${idx})">
-            <i class="fas fa-trash"></i>
-          </button>
-        </td>
-      `;
-      tbody.appendChild(tr);
+    listKasKeluar.push({
+        tanggal: tglTransaksi,
+        deskripsi: deskripsi,
+        qty: qty,
+        harga: harga,
+        jumlah: subtotal
     });
-  }
 
-  updateKalkulasiSaldo();
+    // Reset Form Input
+    document.getElementById("inputDeskripsi").value = "";
+    document.getElementById("inputQty").value = "1";
+    document.getElementById("inputHarga").value = "";
+    document.getElementById("inputSubtotal").value = "";
+
+    renderTabelKasKeluar();
 }
 
-// Kalkulasi Pemotongan Saldo
-function updateKalkulasiSaldo() {
-  const totalPengeluaran = listKasKeluar.reduce((sum, item) => sum + item.jumlah, 0);
-  const sisaSaldo = globalSaldoAwal - totalPengeluaran;
-
-  document.getElementById("txtSaldoAwal").innerText = formatRupiah(globalSaldoAwal);
-  document.getElementById("txtTotalPengeluaran").innerText = formatRupiah(totalPengeluaran);
-  document.getElementById("txtSisaSaldo").innerText = formatRupiah(sisaSaldo);
-  document.getElementById("cellTotalJumlah").innerText = formatRupiah(totalPengeluaran);
-
-  // Beri warna peringatan jika sisa saldo kurang dari 0
-  const elSisa = document.getElementById("txtSisaSaldo");
-  if (sisaSaldo < 0) {
-    elSisa.className = "text-danger fw-bold mb-0";
-  } else {
-    elSisa.className = "text-success fw-bold mb-0";
-  }
+// Hapus Item Baris Kas Keluar
+function hapusBarisKasKeluar(index) {
+    listKasKeluar.splice(index, 1);
+    renderTabelKasKeluar();
 }
 
-// Kirim Data Pengeluaran ke backend GAS
-function simpanPengeluaranKas() {
-  if (listKasKeluar.length === 0) {
-    alert("Tabel transaksi masih kosong!");
-    return;
-  }
-
-  const totalPengeluaran = listKasKeluar.reduce((sum, item) => sum + item.jumlah, 0);
-  const deskripsiRingkasan = listKasKeluar.map(i => `${i.deskripsi} (${i.qty}x)`).join(", ");
-
-  const payloadData = {
-    token: TOKEN,
-    action: "addPengeluaran",
-    payload: {
-      keperluan: deskripsiRingkasan,
-      nominal: totalPengeluaran,
-      detail: listKasKeluar
-    }
-  };
-
-  fetch(URL_GAS, {
-    method: "POST",
-    body: JSON.stringify(payloadData)
-  })
-  .then(res => res.json())
-  .then(res => {
-    if (res.success) {
-      alert("Laporan Kas Keluar berhasil disimpan!");
-      
-      // Reset tabel lokal
-      listKasKeluar = [];
-      renderTabel();
-
-      // PANGGUL ULANG DATA DASHBOARD SUPAYA CARD ATAS TERUPDATE
-      if (typeof loadDataFromGAS === "function") {
-        loadDataFromGAS(); // Sesuaikan dengan nama fungsi load/read data di script utama Mas Bro
-      } else {
-        location.reload(); // Opsi fallback: reload halaman jika tidak ada fungsi reload khusus
-      }
-    } else {
-      alert("Gagal menyimpan: " + res.error);
-    }
-  });
-}
-  // Contoh request menggunakan Fetch API ke Web App URL GAS Mas Bro
-  fetch("URL_WEB_APP_GAS_MAS_BRO", {
-    method: "POST",
-    body: JSON.stringify(payloadData)
-  })
-  .then(res => res.json())
-  .then(res => {
-    if (res.success) {
-      alert("Laporan Kas Keluar berhasil disimpan!");
-      // Kosongkan daftar dan perbarui saldo
-      globalSaldoAwal -= totalPengeluaran;
-      listKasKeluar = [];
-      renderTabel();
-    } else {
-      alert("Gagal menyimpan: " + res.error);
-    }
-  })
-  .catch(err => {
-    console.error(err);
-    alert("Terjadi kesalahan koneksi!");
-  });
-}
-
-       function updateDashboardUI(data) {
-  // Update Card Statistik Utama
-  document.getElementById("cardPemasukan").innerText = formatRupiah(data.totalMasuk);
-  document.getElementById("cardPengeluaran").innerText = formatRupiah(data.totalKeluar);
-  document.getElementById("cardSaldo").innerText = formatRupiah(data.saldo);
-  
-  // Update teks keterangan di bawah Saldo
-  document.getElementById("subtextSaldo").innerText = 
-    `Kas masuk ${formatRupiah(data.totalMasuk)} - keluar ${formatRupiah(data.totalKeluar)}`;
+// Render Tabel Kas Keluar & Kalkulasi Sisa Saldo Real-time
+function renderTabelKasKeluar() {
+    const tbody = document.getElementById("tbodyKasKeluar");
+    if (!tbody) return;
     
-  // Perbarui saldo awal di form Kas Keluar
-  globalSaldoAwal = data.saldo;
-  document.getElementById("txtSaldoAwal").innerText = formatRupiah(data.saldo);
-} 
+    tbody.innerHTML = "";
+
+    if (listKasKeluar.length === 0) {
+        tbody.innerHTML = `<tr id="emptyRow"><td colspan="6" style="text-align:center; color:var(--text-muted);">Belum ada item transaksi yang ditambahkan.</td></tr>`;
+    } else {
+        listKasKeluar.forEach((item, idx) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${idx + 1}</td>
+                <td>${item.tanggal}</td>
+                <td style="text-align:left;">${item.deskripsi}</td>
+                <td>${item.qty}</td>
+                <td>Rp${formatNumber(item.jumlah)}</td>
+                <td>
+                    <button class="delete-btn" onclick="hapusBarisKasKeluar(${idx})" title="Hapus"><i class="fas fa-trash"></i></button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Kalkulasi
+    const totalMasuk = siswaData.reduce((sum, s) => sum + (s.nominal || 0), 0);
+    const totalPengeluaranBaru = listKasKeluar.reduce((sum, item) => sum + item.jumlah, 0);
+    const totalKeluarGabungan = kasKeluarTotal + totalPengeluaranBaru;
+    const sisaSaldo = totalMasuk - totalKeluarGabungan;
+
+    if(document.getElementById("txtSaldoAwal")) 
+        document.getElementById("txtSaldoAwal").innerText = 'Rp' + formatNumber(totalMasuk - kasKeluarTotal);
+    if(document.getElementById("txtTotalPengeluaran")) 
+        document.getElementById("txtTotalPengeluaran").innerText = 'Rp' + formatNumber(totalPengeluaranBaru);
+    if(document.getElementById("txtSisaSaldo")) 
+        document.getElementById("txtSisaSaldo").innerText = 'Rp' + formatNumber(sisaSaldo);
+    if(document.getElementById("cellTotalJumlah")) 
+        document.getElementById("cellTotalJumlah").innerText = 'Rp' + formatNumber(totalPengeluaranBaru);
+}
+
+// Simpan Laporan Transaksi Kas Keluar
+async function simpanPengeluaranKas() {
+    if (!isAdmin) { toast('Login dulu sebagai Admin', 'warning'); return; }
+    if (listKasKeluar.length === 0) {
+        toast("Tabel transaksi kas keluar masih kosong!", "warning");
+        return;
+    }
+
+    const totalPengeluaran = listKasKeluar.reduce((sum, item) => sum + item.jumlah, 0);
+    const deskripsiRingkasan = listKasKeluar.map(i => `${i.deskripsi} (${i.qty}x)`).join(", ");
+    const now = new Date().toISOString().slice(0, 10);
+
+    // Simpan ke memory lokal pengeluaranData
+    listKasKeluar.forEach(item => {
+        pengeluaranData.push({
+            tanggal: item.tanggal,
+            deskripsi: item.deskripsi,
+            nominal: item.jumlah
+        });
+    });
+    savePengeluaran();
+
+    // Tambahkan ke Total Kas Keluar Lokal
+    kasKeluarTotal += totalPengeluaran;
+    saveKas();
+
+    // Update Log & Tampilan Utama
+    catatLog('Kas Keluar', `Rp${formatNumber(totalPengeluaran)} - ${deskripsiRingkasan}`);
+    renderTable(); // Update Card Utama (Pemasukan, Pengeluaran, Saldo)
+
+    // Kirim ke Spreadsheet (Google Apps Script)
+    const success = await postToGAS('addPengeluaran', {
+        keperluan: deskripsiRingkasan,
+        nominal: totalPengeluaran,
+        detail: listKasKeluar
+    });
+
+    if (success) {
+        toast("Laporan Kas Keluar berhasil disimpan!", "success");
+    }
+
+    // Reset Tabel Input Kas Keluar
+    listKasKeluar = [];
+    renderTabelKasKeluar();
+}
     </script>
 
 </body>
