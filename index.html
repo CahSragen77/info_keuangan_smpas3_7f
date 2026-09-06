@@ -1330,6 +1330,103 @@
                 </div>
             </div>
 
+            <!--PENGGUNAAN KAS-->
+
+            <div class="container my-4">
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Laporan Penggunaan Kas (Kas Keluar)</h5>
+      <span class="badge bg-light text-dark" id="tglHariIni"></span>
+    </div>
+    <div class="card-body">
+      
+      <!-- Informasi Saldo Real-time -->
+      <div class="row text-center mb-4">
+        <div class="col-md-4 mb-2">
+          <div class="p-3 border rounded bg-light">
+            <small class="text-muted d-block">Saldo Kas Saat Ini (Awal)</small>
+            <h4 class="text-primary fw-bold mb-0" id="txtSaldoAwal">Rp 0</h4>
+          </div>
+        </div>
+        <div class="col-md-4 mb-2">
+          <div class="p-3 border rounded bg-light">
+            <small class="text-muted d-block">Total Pengeluaran Hari Ini</small>
+            <h4 class="text-danger fw-bold mb-0" id="txtTotalPengeluaran">Rp 0</h4>
+          </div>
+        </div>
+        <div class="col-md-4 mb-2">
+          <div class="p-3 border rounded bg-light">
+            <small class="text-muted d-block">Sisa Saldo Kas</small>
+            <h4 class="text-success fw-bold mb-0" id="txtSisaSaldo">Rp 0</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form Input Ringkas -->
+      <form id="formKasKeluar" class="row g-3 mb-4">
+        <div class="col-md-3">
+          <label class="form-label font-weight-bold">Deskripsi / Keperluan</label>
+          <input type="text" id="inputDeskripsi" class="form-control" placeholder="Contoh: Beli Spidol & Kertas" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label font-weight-bold">Qty</label>
+          <input type="number" id="inputQty" class="form-control" value="1" min="1" oninput="hitungSubtotal()" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label font-weight-bold">Harga Satuan (Rp)</label>
+          <input type="number" id="inputHarga" class="form-control" placeholder="0" min="0" oninput="hitungSubtotal()" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label font-weight-bold">Subtotal (Rp)</label>
+          <input type="text" id="inputSubtotal" class="form-control" readonly placeholder="0">
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <button type="button" class="btn btn-primary w-100" onclick="tambahBarisTabel()">
+            <i class="fas fa-plus me-1"></i> Tambah
+          </button>
+        </div>
+      </form>
+
+      <!-- Tabel Detail Penggunaan Kas -->
+      <div class="table-responsive">
+        <table class="table table-bordered table-striped text-center align-middle" id="tabelKasKeluar">
+          <thead class="table-dark">
+            <tr>
+              <th style="width: 50px;">No</th>
+              <th style="width: 160px;">Tanggal Transaksi</th>
+              <th>Deskripsi</th>
+              <th style="width: 80px;">Qty</th>
+              <th style="width: 150px;">Jumlah (Rp)</th>
+              <th style="width: 80px;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyKasKeluar">
+            <!-- Data baris transaksi akan ditambahkan via JavaScript -->
+            <tr id="emptyRow">
+              <td colspan="6" class="text-muted">Belum ada item transaksi yang ditambahkan.</td>
+            </tr>
+          </tbody>
+          <tfoot class="table-secondary fw-bold">
+            <tr>
+              <td colspan="4" class="text-end">TOTAL KAS KELUAR:</td>
+              <td id="cellTotalJumlah">Rp 0</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Tombol Simpan ke Spreadsheet -->
+      <div class="text-end mt-3">
+        <button type="button" class="btn btn-success btn-lg" onclick="simpanPengeluaranKas()">
+          <i class="fas fa-save me-1"></i> Simpan Laporan Transaksi
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
             <!-- QR Scanner -->
             <div id="scannerContainer">
                 <div id="qr-reader"></div>
@@ -2687,6 +2784,167 @@
         console.log('📄 PDF format laporan resmi SMP Pasundan 3');
         console.log('🔄 Auto-sync GAS setiap 30 menit (jika admin login)');
         console.log('🛒 Iklan Shopee & TikTok siap di footer');
+
+
+
+        // Variable Global
+let globalSaldoAwal = 0; // Akan diisi dari data doGet (data.saldo)
+let listKasKeluar = [];
+
+// Format Angka ke Rupiah
+function formatRupiah(angka) {
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(angka);
+}
+
+// Inisialisasi Data Tampilan dari backend GAS
+function initHalamanKasKeluar(dataFromGAS) {
+  // Ambil saldo aktual dari respon `doGet`
+  globalSaldoAwal = dataFromGAS.saldo || 0;
+  
+  document.getElementById('tglHariIni').innerText = new Date().toLocaleDateString('id-ID', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  updateKalkulasiSaldo();
+}
+
+// Hitung Subtotal saat Qty atau Harga diubah
+function hitungSubtotal() {
+  const qty = parseFloat(document.getElementById("inputQty").value) || 0;
+  const harga = parseFloat(document.getElementById("inputHarga").value) || 0;
+  const subtotal = qty * harga;
+  document.getElementById("inputSubtotal").value = formatRupiah(subtotal);
+}
+
+// Tambahkan Baris Transaksi ke Tabel
+function tambahBarisTabel() {
+  const deskripsi = document.getElementById("inputDeskripsi").value.trim();
+  const qty = parseInt(document.getElementById("inputQty").value) || 0;
+  const harga = parseFloat(document.getElementById("inputHarga").value) || 0;
+  const subtotal = qty * harga;
+
+  if (!deskripsi || qty <= 0 || harga <= 0) {
+    alert("Mohon isi deskripsi, qty, dan harga satuan dengan benar.");
+    return;
+  }
+
+  const tglTransaksi = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+
+  // Masukkan ke array
+  const item = {
+    tanggal: tglTransaksi,
+    deskripsi: deskripsi,
+    qty: qty,
+    harga: harga,
+    jumlah: subtotal
+  };
+  listKasKeluar.push(item);
+
+  // Reset Input Form
+  document.getElementById("inputDeskripsi").value = "";
+  document.getElementById("inputQty").value = "1";
+  document.getElementById("inputHarga").value = "";
+  document.getElementById("inputSubtotal").value = "";
+
+  renderTabel();
+}
+
+// Hapus Item Baris
+function hapusBaris(index) {
+  listKasKeluar.splice(index, 1);
+  renderTabel();
+}
+
+// Render Ulang Tabel & Hitung Saldo Real-time
+function renderTabel() {
+  const tbody = document.getElementById("tbodyKasKeluar");
+  tbody.innerHTML = "";
+
+  if (listKasKeluar.length === 0) {
+    tbody.innerHTML = `<tr id="emptyRow"><td colspan="6" class="text-muted">Belum ada item transaksi yang ditambahkan.</td></tr>`;
+  } else {
+    listKasKeluar.forEach((item, idx) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${idx + 1}</td>
+        <td>${item.tanggal}</td>
+        <td class="text-start">${item.deskripsi}</td>
+        <td>${item.qty}</td>
+        <td>${formatRupiah(item.jumlah)}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-danger" onclick="hapusBaris(${idx})">
+            <i class="fas fa-trash"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  updateKalkulasiSaldo();
+}
+
+// Kalkulasi Pemotongan Saldo
+function updateKalkulasiSaldo() {
+  const totalPengeluaran = listKasKeluar.reduce((sum, item) => sum + item.jumlah, 0);
+  const sisaSaldo = globalSaldoAwal - totalPengeluaran;
+
+  document.getElementById("txtSaldoAwal").innerText = formatRupiah(globalSaldoAwal);
+  document.getElementById("txtTotalPengeluaran").innerText = formatRupiah(totalPengeluaran);
+  document.getElementById("txtSisaSaldo").innerText = formatRupiah(sisaSaldo);
+  document.getElementById("cellTotalJumlah").innerText = formatRupiah(totalPengeluaran);
+
+  // Beri warna peringatan jika sisa saldo kurang dari 0
+  const elSisa = document.getElementById("txtSisaSaldo");
+  if (sisaSaldo < 0) {
+    elSisa.className = "text-danger fw-bold mb-0";
+  } else {
+    elSisa.className = "text-success fw-bold mb-0";
+  }
+}
+
+// Kirim Data Pengeluaran ke backend GAS
+function simpanPengeluaranKas() {
+  if (listKasKeluar.length === 0) {
+    alert("Tabel transaksi masih kosong!");
+    return;
+  }
+
+  const totalPengeluaran = listKasKeluar.reduce((sum, item) => sum + item.jumlah, 0);
+  const deskripsiRingkasan = listKasKeluar.map(i => `${i.deskripsi} (${i.qty}x)`).join(", ");
+
+  const payloadData = {
+    token: TOKEN, // Menggunakan TOKEN dari GAS
+    action: "addPengeluaran",
+    payload: {
+      keperluan: deskripsiRingkasan,
+      nominal: totalPengeluaran,
+      detail: listKasKeluar // Disimpan sebagai JSON di kolom ke-4 Google Sheet
+    }
+  };
+
+  // Contoh request menggunakan Fetch API ke Web App URL GAS Mas Bro
+  fetch("URL_WEB_APP_GAS_MAS_BRO", {
+    method: "POST",
+    body: JSON.stringify(payloadData)
+  })
+  .then(res => res.json())
+  .then(res => {
+    if (res.success) {
+      alert("Laporan Kas Keluar berhasil disimpan!");
+      // Kosongkan daftar dan perbarui saldo
+      globalSaldoAwal -= totalPengeluaran;
+      listKasKeluar = [];
+      renderTabel();
+    } else {
+      alert("Gagal menyimpan: " + res.error);
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    alert("Terjadi kesalahan koneksi!");
+  });
+}
     </script>
 
 </body>
