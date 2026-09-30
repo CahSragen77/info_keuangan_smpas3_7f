@@ -723,134 +723,7 @@
             display: none;
         }
 
-        /* ===== FLOATING SOCIAL MEDIA ===== */
-        .social-float {
-            position: fixed;
-            bottom: 30px;
-            left: 30px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 999;
-        }
-        .social-float a {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            color: #fff;
-            font-size: 1.2rem;
-            text-decoration: none;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            transition: 0.3s ease;
-        }
-        .social-float a:hover {
-            transform: scale(1.15);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-        }
-        .social-float .wa {
-            background: #25D366;
-        }
-        .social-float .fb {
-            background: #1877F2;
-        }
-        .social-float .ig {
-            background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-        }
-        .social-float .linkedin {
-            background: #0A66C2;
-        }
-
-        /* ===== FOOTER ===== */
-        .footer-custom {
-            text-align: center;
-            padding: 20px 0 10px;
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            border-top: 1px solid #e2e8f0;
-            margin-top: 20px;
-        }
-        .footer-custom .social-links {
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            margin-bottom: 8px;
-        }
-        .footer-custom .social-links a {
-            color: var(--text-muted);
-            font-size: 1.1rem;
-            transition: 0.3s;
-        }
-        .footer-custom .social-links a:hover {
-            color: var(--accent);
-        }
-        .footer-credit {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            line-height: 1.8;
-            margin-top: 6px;
-        }
-        .footer-credit .social-link {
-            color: var(--accent-hover);
-            font-weight: 600;
-            transition: 0.3s;
-        }
-        .footer-credit .social-link:hover {
-            color: var(--accent);
-        }
-        .claude-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            margin-top: 8px;
-            padding: 5px 14px;
-            border-radius: 50px;
-            background: linear-gradient(135deg, #f0f7ff, #eef2ff);
-            border: 1px solid #dbe4f3;
-            color: #5b5bd6;
-            font-size: 0.72rem;
-            font-weight: 600;
-        }
-        .claude-badge svg {
-            width: 14px;
-            height: 14px;
-            flex-shrink: 0;
-        }
-        .iklan-mini {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            margin-top: 4px;
-        }
-        .iklan-mini a {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            color: var(--text-muted);
-            text-decoration: none;
-            transition: 0.3s;
-            padding: 2px 8px;
-            border-radius: 20px;
-            background: #f1f5f9;
-        }
-        .iklan-mini a:hover {
-            background: #e2e8f0;
-            transform: scale(1.03);
-        }
-        .iklan-mini a i {
-            font-size: 1.1rem;
-        }
-        .iklan-mini .shopee {
-            color: #ee4d2d;
-        }
-        .iklan-mini .tiktok {
-            color: #010101;
-        }
-
+        
         /* ===== PDF EXPORT ===== */
         #pdf-export-container {
             display: none;
@@ -1107,6 +980,133 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--accent-hover);
         }
+
+        /* Container Utama Footer - Diset Vertikal (Top to Bottom) */
+.social-footer-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 15px;
+  gap: 16px;
+  background: transparent;
+  width: 100%;
+}
+
+/* Floating Bar Icon (Horisontal / Tiduran) */
+.social-footer-bar {
+  display: flex;
+  flex-direction: row; /* Berjejer ke samping */
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  padding: 8px 16px;
+  border-radius: 50px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* Styling Ukuran Icon yang Lebih Ringkas & Elegan */
+.social-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: #555;
+  background: #f0f2f5;
+  text-decoration: none;
+  font-size: 16px;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Efek Hover / Membal saat disentuh kursor */
+.social-icon:hover {
+  transform: translateY(-4px) scale(1.12);
+  color: #fff;
+}
+
+/* Warna Masing-masing Brand & Efek Glowing */
+.social-icon.linkedin:hover {
+  background: #0077b5;
+  box-shadow: 0 5px 12px rgba(0, 119, 181, 0.4);
+}
+
+.social-icon.facebook:hover {
+  background: #1877f2;
+  box-shadow: 0 5px 12px rgba(24, 119, 242, 0.4);
+}
+
+.social-icon.instagram:hover {
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  box-shadow: 0 5px 12px rgba(220, 39, 67, 0.4);
+}
+
+.social-icon.whatsapp:hover {
+  background: #25d366;
+  box-shadow: 0 5px 12px rgba(37, 211, 102, 0.4);
+}
+
+.social-icon.shopee:hover {
+  background: #ee4d2d;
+  box-shadow: 0 5px 12px rgba(238, 77, 45, 0.4);
+}
+
+.social-icon.tiktok:hover {
+  background: #000000;
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Tooltip saat Hover */
+.social-icon .tooltip {
+  position: absolute;
+  top: -36px;
+  background: #222;
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: all 0.25s ease;
+  font-family: sans-serif;
+}
+
+.social-icon .tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px 4px 0;
+  border-style: solid;
+  border-color: #222 transparent;
+}
+
+.social-icon:hover .tooltip {
+  opacity: 1;
+  visibility: visible;
+  top: -40px;
+}
+
+/* Styling Teks Credit Bagian Bawah */
+.footer-credits {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.footer-credits strong {
+  color: #222;
+}
     </style>
 </head>
 <body>
@@ -1461,51 +1461,7 @@
             </div>
         </section>
 
-        <!-- FOOTER -->
-        <footer class="footer-custom">
-            <div class="social-links">
-                <a href="https://wa.me/6281389188903?text=Assalamu%27alaikum...%20Kak%2C%20aku%20mau%20informasi%20tentang%20....%20tolong%20dibantu%20ya%20Kak" target="_blank" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
-                <a href="https://web.facebook.com/ydwiranto" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
-                <a href="https://www.instagram.com/cahsragen_77/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
-                <a href="https://www.linkedin.com/in/yudi-dwiranto-cs77" target="_blank" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
-            </div>
-            <div>
-                <i class="fas fa-database"></i> Data tersimpan di local storage &bull;
-                <i class="fas fa-shield-alt"></i> Read-only untuk publik &bull;
-                <i class="fas fa-sync-alt"></i> Sync otomatis setiap 30 menit
-            </div>
-            <div style="margin-top:4px;">
-                <i class="fas fa-phone"></i> 0813 8918 8903 &bull;
-                <i class="fas fa-envelope"></i> info@smppasundan3.sch.id
-            </div>
-            <div class="footer-credit">
-                Handcrafted with ❤ by <strong>Andrew Dwiranto</strong> (Cah_Sragen_77, Indonesia)
-                | Connect with me:
-                <a href="https://www.linkedin.com/in/yudi-dwiranto-cs77" target="_blank" class="social-link text-decoration-none">LinkedIn</a> •
-                <a href="https://www.instagram.com/cahsragen_77/" target="_blank" class="social-link text-decoration-none">Instagram</a> •
-                <a href="https://web.facebook.com/ydwiranto" target="_blank" class="social-link text-decoration-none">Facebook</a> •
-                <a href="https://github.com/CahSragen77" target="_blank" class="social-link text-decoration-none">GitHub</a> •
-                <a href="https://www.tiktok.com/@selarasdirumah" target="_blank" class="social-link text-decoration-none">Tik-tok</a> •
-                <a href="https://id.shp.ee/yudmwbm1?fromSource=whatsapp&smtt=0.0.3" target="_blank" class="social-link text-decoration-none">Shopee</a>
-                <br />
-                <span class="claude-badge">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2 L14.2 9.2 L21.5 12 L14.2 14.8 L12 22 L9.8 14.8 L2.5 12 L9.8 9.2 Z" fill="#6C63FF"/>
-                    </svg>
-                    kerja bareng Claude AI
-                </span>
-            </div>
-        </footer>
-    </div>
-
-    <!-- ===== FLOATING SOCIAL MEDIA ===== -->
-    <div class="social-float">
-        <a href="https://wa.me/6281389188903?text=Assalamu%27alaikum...%20Kak%2C%20aku%20mau%20informasi%20tentang%20....%20tolong%20dibantu%20ya%20Kak" target="_blank" class="wa" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
-        <a href="https://web.facebook.com/ydwiranto" target="_blank" class="fb" title="Facebook"><i class="fab fa-facebook-f"></i></a>
-        <a href="https://www.instagram.com/cahsragen_77/" target="_blank" class="ig" title="Instagram"><i class="fab fa-instagram"></i></a>
-        <a href="https://www.linkedin.com/in/yudi-dwiranto-cs77" target="_blank" class="linkedin" title="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
-    </div>
-
+      
     <!-- ===== PDF CONTAINER ===== -->
     <div id="pdf-export-container" style="display:none;"></div>
 
